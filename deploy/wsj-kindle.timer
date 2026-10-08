@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the WSJ Chinese digest once a day
+
+[Timer]
+# 时间带时区，避免服务器是 UTC 时跑在半夜（北京时间 07:00）
+OnCalendar=*-*-* 07:00:00 Asia/Shanghai
+# 服务器重启/错过时间点时补跑一次
+Persistent=true
+# 错开负载，避免和英文任务同时开始
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

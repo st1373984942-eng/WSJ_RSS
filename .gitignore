@@ -1,0 +1,28 @@
+# ---- 绝不入库：抓下来的新闻正文（版权内容，而且会让仓库爆掉）----
+wsj-kindle/articles/
+wsj-politics/articles/
+wsj-kindle/public/
+wsj-politics/public/
+wsj-kindle/out/
+wsj-politics/out/
+wsj-kindle/logs/
+wsj-politics/logs/
+urls.txt
+wsj-kindle/urls.txt
+wsj-politics/urls.txt
+
+# ---- 运行状态：必须入库，否则每次跑都会重复推送同一批文章 ----
+# （只保留 seen.json，其余中间产物不入库）
+wsj-kindle/data/*
+!wsj-kindle/data/seen.json
+wsj-politics/data/*
+!wsj-politics/data/seen.json
+
+# ---- 杂项 ----
+__pycache__/
+*.pyc
+.browser-profile*/
+.browser-profile-edge/
+*.epub
+*.mobi
+!wsj-kindle/out/.gitkeep

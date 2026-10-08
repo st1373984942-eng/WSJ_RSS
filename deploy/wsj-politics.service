@@ -1,0 +1,23 @@
+[Unit]
+Description=WSJ Politics (English) daily digest -> RSS/EPUB -> Kindle
+Documentation=file://__APP_ROOT__/wsj-politics/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+Group=__USER__
+WorkingDirectory=__APP_ROOT__/wsj-politics
+Environment=PYTHONUTF8=1
+Environment=PYTHONIOENCODING=utf-8
+Environment=LANG=C.UTF-8
+Environment=QT_QPA_PLATFORM=offscreen
+#Environment=HTTPS_PROXY=http://127.0.0.1:7890
+#Environment=HTTP_PROXY=http://127.0.0.1:7890
+ExecStartPre=/usr/bin/mkdir -p __APP_ROOT__/wsj-politics/logs
+ExecStart=__APP_ROOT__/venv/bin/python __APP_ROOT__/wsj-kindle/scripts/run_pipeline.py --project __APP_ROOT__/wsj-politics
+StandardOutput=append:__APP_ROOT__/wsj-politics/logs/pipeline.log
+StandardError=append:__APP_ROOT__/wsj-politics/logs/pipeline.log
+TimeoutStartSec=2400
+Nice=10

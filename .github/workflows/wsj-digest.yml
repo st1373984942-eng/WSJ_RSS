@@ -1,0 +1,118 @@
+name: WSJ daily digest
+
+# 云端定时推送：GitHub Actions 的 runner 是常开的，本机关机也照跑。
+# 思路参考书伴《用 GitHub Actions 让 Calibre 定时推送新闻到 Kindle》
+# （https://bookfere.com/post/1107.html）：Environment secrets 存 SMTP、改 cron 定时、产物进 Artifacts。
+# 与本项目不同的地方：runner 上没有 Calibre，所以 EPUB 走纯 Python 引擎
+# （build_epub.py --engine auto 会自动选择），另外把 seen.json 提交回仓库以避免重复推送。
+on:
+  schedule:
+    # 时间是 UTC。北京时间 07:00 = 前一日 23:00 UTC
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      project:
+        description: "只跑一个项目？"
+        type: choice
+        default: all
+        options:
+          - all
+          - wsj-kindle
+          - wsj-politics
+      force:
+        description: "忽略 seen.json，强制重抓全部"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # 需要把 data/seen.json 提交回去
+
+concurrency:
+  group: wsj-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    name: ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    environment: kindle # secrets 放在这个 Environment 里，见 deploy/github-actions-setup.md
+    strategy:
+      fail-fast: false
+      # 两个项目都要访问 archive.today（有限流），串行跑更稳，也避免同时提交状态冲突
+      max-parallel: 1
+      matrix:
+        project: [wsj-kindle, wsj-politics]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: deploy/requirements.txt
+
+      - name: 判断本次是否需要跑这个项目
+        id: sel
+        run: |
+          want="${{ inputs.project }}"
+          if [ -z "$want" ] || [ "$want" = "all" ] || [ "$want" = "${{ matrix.project }}" ]; then
+            echo "run=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=0" >> "$GITHUB_OUTPUT"
+            echo "跳过 ${{ matrix.project }}（本次只跑 $want）"
+          fi
+
+      - name: 安装依赖
+        if: steps.sel.outputs.run == '1'
+        run: pip install -r deploy/requirements.txt
+
+      - name: 准备目录
+        if: steps.sel.outputs.run == '1'
+        run: mkdir -p "${{ matrix.project }}/data" "${{ matrix.project }}/logs"
+
+      - name: 预检（只看连通性，失败不阻断）
+        if: steps.sel.outputs.run == '1'
+        continue-on-error: true
+        run: python deploy/preflight.py
+
+      - name: 跑流水线（发现 → 抓取 → RSS → EPUB → 推送）
+        if: steps.sel.outputs.run == '1'
+        env:
+          WSJ_KINDLE_ENABLED: "true"
+          # 下面这些名字与书伴那篇教程的变量表一致，照着填即可
+          TO: ${{ secrets.TO }}
+          FROM: ${{ secrets.FROM }}
+          SMTP: ${{ secrets.SMTP }}
+          PORT: ${{ secrets.PORT }}
+          ENCRYPT: ${{ secrets.ENCRYPT }}
+          SECRET: ${{ secrets.SECRET }}
+        run: |
+          python wsj-kindle/scripts/run_pipeline.py \
+            --project "${{ matrix.project }}" \
+            ${{ inputs.force && '--force' || '' }}
+
+      - name: 上传产物（EPUB + feed.xml）
+        if: always() && steps.sel.outputs.run == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.project }}-${{ github.run_number }}
+          path: |
+            ${{ matrix.project }}/out/*.epub
+            ${{ matrix.project }}/public/feed.xml
+            ${{ matrix.project }}/logs/pipeline.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: 提交状态回仓库（否则每次都会重复推送）
+        if: always() && steps.sel.outputs.run == '1'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "${{ matrix.project }}/data/seen.json" 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "状态无变化"
+          else
+            git commit -m "chore(${{ matrix.project }}): update digest state [skip ci]"
+            git push
+          fi

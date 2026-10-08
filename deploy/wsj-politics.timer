@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the WSJ Politics digest once a day
+
+[Timer]
+# 比中文任务晚 20 分钟，两个任务都要走 archive.today（会限流），错开更稳
+OnCalendar=*-*-* 07:20:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

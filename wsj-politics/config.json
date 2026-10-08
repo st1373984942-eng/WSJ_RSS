@@ -1,0 +1,65 @@
+{
+  "site": "wsj.com",
+  "pipeline": {
+    "discover_script": "wsj_discover_sitemap.py",
+    "fetch_script": "wsj_fetch_multi.py"
+  },
+  "discover": {
+    "mode": "sitemap",
+    "since": "2d",
+    "referer": "https://www.google.com/",
+    "path_prefixes": [
+      "politics/"
+    ],
+    "sitemaps": [
+      "https://www.wsj.com/wsjsitemaps/wsj_google_news.xml"
+    ],
+    "use_month_fallback": true
+  },
+  "fetch": {
+    "sources": [
+      "archive_today",
+      "wayback",
+      "live"
+    ],
+    "referer": "https://www.google.com/",
+    "cookie": "",
+    "delay_seconds": 3,
+    "good_enough_words": 400,
+    "paywall_note": "> Note: paywalled by WSJ — the text above is the free preview. Full article needs a subscription.",
+    "concurrency": 1
+  },
+  "feed": {
+    "base_url": "http://127.0.0.1:8081",
+    "title": "WSJ Politics",
+    "description": "The Wall Street Journal — Politics section, daily digest (personal reading only)",
+    "author": "The Wall Street Journal",
+    "language": "en-us",
+    "max_items": 25
+  },
+  "server": {
+    "port": 8081
+  },
+  "epub": {
+    "title": "WSJ Politics",
+    "authors": "The Wall Street Journal",
+    "output_profile": "kindle_pw3",
+    "filename_prefix": "wsj-politics",
+    "max_items": 25
+  },
+  "kindle": {
+    "enabled": false,
+    "addresses": [
+      "your-device@kindle.com"
+    ],
+    "smtp": {
+      "host": "smtp.qq.com",
+      "port": 465,
+      "ssl": true,
+      "username": "you@qq.com",
+      "password": "",
+      "from": "you@qq.com",
+      "from_name": "WSJ Politics to Kindle"
+    }
+  }
+}

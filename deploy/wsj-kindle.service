@@ -1,0 +1,24 @@
+[Unit]
+Description=WSJ Chinese daily digest -> RSS/EPUB -> Kindle
+Documentation=file://__APP_ROOT__/wsj-kindle/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+Group=__USER__
+WorkingDirectory=__APP_ROOT__/wsj-kindle
+Environment=PYTHONUTF8=1
+Environment=PYTHONIOENCODING=utf-8
+Environment=LANG=C.UTF-8
+Environment=QT_QPA_PLATFORM=offscreen
+# 如果这台服务器需要代理才能访问 wsj / archive.today，取消下面两行注释并填上
+#Environment=HTTPS_PROXY=http://127.0.0.1:7890
+#Environment=HTTP_PROXY=http://127.0.0.1:7890
+ExecStartPre=/usr/bin/mkdir -p __APP_ROOT__/wsj-kindle/logs
+ExecStart=__APP_ROOT__/venv/bin/python __APP_ROOT__/wsj-kindle/scripts/run_pipeline.py --project __APP_ROOT__/wsj-kindle
+StandardOutput=append:__APP_ROOT__/wsj-kindle/logs/pipeline.log
+StandardError=append:__APP_ROOT__/wsj-kindle/logs/pipeline.log
+TimeoutStartSec=2400
+Nice=10

@@ -1,0 +1,66 @@
+{
+  "site": "cn.wsj.com",
+  "pipeline": {
+    "discover_script": "wsj_discover_sitemap.py",
+    "fetch_script": "wsj_fetch_multi.py"
+  },
+  "discover": {
+    "mode": "sitemap",
+    "since": "2d",
+    "referer": "https://www.google.com/",
+    "sitemaps": [
+      "https://cn.wsj.com/wsj_cn_google_news.xml"
+    ],
+    "path_prefixes": [
+      "articles/"
+    ],
+    "use_month_fallback": false
+  },
+  "fetch": {
+    "sources": [
+      "archive_today",
+      "bpc_fetch",
+      "live"
+    ],
+    "referer": "https://www.google.com/",
+    "cookie": "",
+    "try_archive": false,
+    "delay_seconds": 3,
+    "good_enough_words": 500,
+    "paywall_note": "> 注：此为付费内容，以上仅为免费预览段落（点链接可在 WSJ 客户端续读全文）。",
+    "concurrency": 1
+  },
+  "feed": {
+    "base_url": "http://127.0.0.1:8080",
+    "title": "华尔街日报中文版",
+    "description": "WSJ 中文版每日精选（sitemap 发现 + archive.today 取全文，仅供个人阅读）",
+    "author": "华尔街日报中文版",
+    "language": "zh-cn",
+    "max_items": 30
+  },
+  "server": {
+    "port": 8080
+  },
+  "epub": {
+    "title": "华尔街日报中文版",
+    "authors": "The Wall Street Journal",
+    "output_profile": "kindle_pw3",
+    "filename_prefix": "wsj-cn",
+    "max_items": 30
+  },
+  "kindle": {
+    "enabled": false,
+    "addresses": [
+      "your-device@kindle.com"
+    ],
+    "smtp": {
+      "host": "smtp.qq.com",
+      "port": 465,
+      "ssl": true,
+      "username": "you@qq.com",
+      "password": "",
+      "from": "you@qq.com",
+      "from_name": "WSJ to Kindle"
+    }
+  }
+}
