@@ -105,6 +105,13 @@ def epub_via_calibre(calibre: pathlib.Path, html_path: pathlib.Path, epub_path: 
         "--language", cfg.get("language", "zh"),
         "--output-profile", cfg.get("output_profile", "kindle_pw3"),
         "--extra-css", CSS,
+        # 目录用每篇文章的标题（h2）。不显式指定的话，Calibre 的自动检测只会给出
+        # 一条名为「开始」的目录，标题全都不进去。
+        "--level1-toc=//h:h2",
+        "--max-levels=1",
+        # 每篇作为一章，并且另起一页（阅读器里的章节导航/进度与翻页体验都靠它）
+        "--chapter=//h:h2",
+        "--page-breaks-before=//h:h2",
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok = proc.returncode == 0 and epub_path.exists()
@@ -210,7 +217,10 @@ def epub_via_python(items: list[dict], epub_path: pathlib.Path, cfg: dict,
         mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
                 "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml"}.get(ext, "image/jpeg")
         manifest.append(f'<item id="img{j:04d}" href="{mapped}" media-type="{mime}"/>')
-    spine = "\n".join(f'<itemref idref="{cid}"/>' for cid, _, _ in chapters)
+    # 目录页放在正文最前面：这样阅读器里既能用「目录」菜单跳转（NCX），
+    # 也能像普通书页一样翻到目录（spine 里必须收进去，否则只是一个孤立页面）
+    spine = '<itemref idref="nav"/>' + "".join(f'<itemref idref="{cid}"/>'
+                                               for cid, _, _ in chapters)
 
     opf = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
