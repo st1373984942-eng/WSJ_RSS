@@ -253,7 +253,7 @@ def main() -> int:
     args = ap.parse_args()
 
     project = pathlib.Path(args.project).resolve()
-    config = json.loads((project / "config.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "config.json").read_text(encoding="utf-8-sig"))
     fcfg = config.get("fetch", {})
     global _COOKIE, _REFERER
     _COOKIE = fcfg.get("cookie", "") or ""

@@ -55,7 +55,7 @@ def main() -> int:
     args = ap.parse_args()
 
     project = pathlib.Path(args.project).resolve()
-    config = json.loads((project / "config.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "config.json").read_text(encoding="utf-8-sig"))
     # 是否推送要看"环境变量覆盖后"的配置：CI 里凭据和 enabled 都走 secrets，
     # 不能只读 config.json（那里 enabled 是 false）
     sys.path.insert(0, str(SCRIPTS))
@@ -94,13 +94,24 @@ def main() -> int:
             return report(steps, "抓取阶段失败")
         # 抓不到 ≠ 失败：刚发布的文章 archive.today 上可能还没存档，
         # 而抓失败的 URL 不会写进 seen.json，下次运行会自动重试。
-        no_new_content = (steps[-1]["result"] or {}).get("success", 0) == 0
+        fetch_result = steps[-1]["result"] or {}
+        no_new_content = fetch_result.get("success", 0) == 0
         if no_new_content:
-            print("本轮没有抓到任何文章（新文章可能尚无存档），跳过 EPUB，下次运行会自动重试")
+            print("本轮没有抓到任何文章，跳过 RSS / EPUB / 推送（这些 URL 未写入 seen.json，下次自动重试）")
+            if fetch_result.get("errors"):
+                print("抓取失败原因（每个来源的尝试结果）：")
+                print(json.dumps(fetch_result["errors"], ensure_ascii=False, indent=2))
 
-    steps.append(run_step("feed", [str(SCRIPTS / "build_feed.py"), "--project", str(project)]))
-    if steps[-1]["returncode"] != 0:
-        return report(steps, "RSS 生成失败")
+    # 关键：一篇都没抓到时**不能**去跑 build_feed ——
+    # runner 是干净检出，articles/ 是空的，build_feed 会以 "没有找到 Markdown" 退出 1，
+    # 把一次「本轮无新内容」的正常情况误报成失败。
+    if no_new_content:
+        steps.append({"step": "feed", "returncode": 0, "result": {
+            "ok": True, "skipped": True, "reason": "本轮无新文章，无需重建 RSS"}})
+    else:
+        steps.append(run_step("feed", [str(SCRIPTS / "build_feed.py"), "--project", str(project)]))
+        if steps[-1]["returncode"] != 0:
+            return report(steps, "RSS 生成失败")
 
     epub_path = None
     if not args.no_epub and not no_new_content:
@@ -131,10 +142,17 @@ def report(steps: list[dict], stop_reason: str | None, benign: bool = False) -> 
     feed = next((s["result"] for s in steps if s["step"] == "feed" and s["result"]), None)
     epub = next((s["result"] for s in steps if s["step"] == "epub" and s["result"]), None)
     failed = [s["step"] for s in steps if s["returncode"] != 0 and s.get("required", True)]
+    # 把"哪一步失败、失败原因是什么"直接放进汇总 JSON：
+    # 在 CI 里这段会被写进运行摘要，不用再去翻几十行日志
+    failing = next((s for s in steps if s["step"] in failed), None)
+    fres = failing.get("result") if failing and isinstance(failing.get("result"), dict) else {}
     summary = {
         "ok": not failed and (benign or not stop_reason),
         "stopped": stop_reason,
         "failed_steps": failed,
+        "failing_step": failing["step"] if failing else None,
+        "failing_reason": (fres or {}).get("error") or (fres or {}).get("hint")
+                          or (failing or {}).get("stderr_tail") or None,
         "kindle_enabled": _KINDLE_ENABLED,
         "env_overrides": sorted(set(_APPLIED)),
         "feed_url": (feed or {}).get("feed_url"),

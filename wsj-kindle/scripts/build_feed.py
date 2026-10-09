@@ -193,7 +193,7 @@ def main() -> int:
     public_dir = pathlib.Path(args.public).resolve() if args.public else project / "public"
     IMAGES_OUT = public_dir / "images"
 
-    config = json.loads((project / "config.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "config.json").read_text(encoding="utf-8-sig"))
     DEFAULT_AUTHOR = config["feed"].get("author", DEFAULT_AUTHOR)
     base_url = (args.base_url or config["feed"]["base_url"]).rstrip("/")
     max_items = args.max_items or int(config["feed"].get("max_items", 25))

@@ -44,7 +44,7 @@ def main() -> int:
     args = ap.parse_args()
 
     project = pathlib.Path(args.project).resolve()
-    config = json.loads((project / "config.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "config.json").read_text(encoding="utf-8-sig"))
     port = args.port or int(config.get("server", {}).get("port", 8080))
     public = project / "public"
     public.mkdir(parents=True, exist_ok=True)

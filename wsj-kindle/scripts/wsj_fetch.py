@@ -195,7 +195,7 @@ async def fetch_one(url: str, sites: dict, out_dir: pathlib.Path, no_images: boo
 
 async def run(args) -> dict:
     project = pathlib.Path(args.project).resolve()
-    config = json.loads((project / "config.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "config.json").read_text(encoding="utf-8-sig"))
     global _COOKIE, _REFERER, _PAYWALL_NOTE
     _COOKIE = (args.cookie if args.cookie is not None else config.get("fetch", {}).get("cookie", "")) or ""
     _REFERER = config.get("fetch", {}).get("referer") or "https://www.google.com/"

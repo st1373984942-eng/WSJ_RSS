@@ -146,7 +146,7 @@ def main() -> int:
     args = ap.parse_args()
 
     project = pathlib.Path(args.project).resolve()
-    config = json.loads((project / "config.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "config.json").read_text(encoding="utf-8-sig"))
     disc = config.get("discover", {})
     since_raw = args.since or disc.get("since", "2d")
     since_dt = parse_since(since_raw)

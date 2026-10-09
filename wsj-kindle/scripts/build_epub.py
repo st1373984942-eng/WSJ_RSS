@@ -264,7 +264,7 @@ def main() -> int:
     args = ap.parse_args()
 
     project = pathlib.Path(args.project).resolve()
-    config = json.loads((project / "config.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "config.json").read_text(encoding="utf-8-sig"))
     public = project / "public"
     manifest_path = public / "manifest.json"
     if not manifest_path.exists():

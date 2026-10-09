@@ -94,7 +94,7 @@ def main() -> int:
     args = ap.parse_args()
 
     project = pathlib.Path(args.project).resolve()
-    config = json.loads((project / "config.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "config.json").read_text(encoding="utf-8-sig"))
     overrides, applied = apply_env_overrides(config)
     kindle = overrides["kindle"]
     smtp = kindle.get("smtp", {})
