@@ -181,5 +181,13 @@ def main() -> int:
     return 0 if not fails else 1
 
 
+# 任意 locale 下都要能打印中文：CI/容器里 stdout 可能是 ASCII，
+# 那样 print 中文会 UnicodeEncodeError，脚本直接以 exit 1 结束（真实踩过的坑）
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        pass
+
 if __name__ == "__main__":
     sys.exit(main())

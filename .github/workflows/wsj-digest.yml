@@ -31,11 +31,18 @@ concurrency:
   group: wsj-digest
   cancel-in-progress: false
 
+# 全局设好：容器里 stdout 若不是 UTF-8，打印中文会 UnicodeEncodeError 直接崩
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
+
 jobs:
   digest:
     name: ${{ matrix.project }}
     runs-on: ubuntu-latest
-    environment: kindle # secrets 放在这个 Environment 里，见 deploy/github-actions-setup.md
+    environment: kindle # secrets 放这里（仓库级 secrets 同样能取到）
     strategy:
       fail-fast: false
       # 两个项目都要访问 archive.today（有限流），串行跑更稳，也避免同时提交状态冲突
@@ -44,9 +51,9 @@ jobs:
         project: [wsj-kindle, wsj-politics]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -63,24 +70,28 @@ jobs:
             echo "跳过 ${{ matrix.project }}（本次只跑 $want）"
           fi
 
+      - name: 环境信息
+        if: steps.sel.outputs.run == '1'
+        run: |
+          python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import os, sys, locale
+          print("### 运行环境")
+          print("```")
+          print("python        ", sys.version.split()[0])
+          print("stdout 编码   ", sys.stdout.encoding)
+          print("preferred     ", locale.getpreferredencoding(False))
+          print("LANG / LC_ALL ", os.environ.get("LANG"), "/", os.environ.get("LC_ALL"))
+          print("```")
+          PY
+
       - name: 安装依赖
         if: steps.sel.outputs.run == '1'
         run: pip install -r deploy/requirements.txt
 
-      - name: 准备目录
-        if: steps.sel.outputs.run == '1'
-        run: mkdir -p "${{ matrix.project }}/data" "${{ matrix.project }}/logs"
-
-      - name: 预检（只看连通性，失败不阻断）
-        if: steps.sel.outputs.run == '1'
-        continue-on-error: true
-        run: python deploy/preflight.py
-
-      - name: 跑流水线（发现 → 抓取 → RSS → EPUB → 推送）
+      - name: 检查推送凭据（secrets）
+        id: creds
         if: steps.sel.outputs.run == '1'
         env:
-          WSJ_KINDLE_ENABLED: "true"
-          # 下面这些名字与书伴那篇教程的变量表一致，照着填即可
           TO: ${{ secrets.TO }}
           FROM: ${{ secrets.FROM }}
           SMTP: ${{ secrets.SMTP }}
@@ -88,19 +99,77 @@ jobs:
           ENCRYPT: ${{ secrets.ENCRYPT }}
           SECRET: ${{ secrets.SECRET }}
         run: |
-          python wsj-kindle/scripts/run_pipeline.py \
-            --project "${{ matrix.project }}" \
-            ${{ inputs.force && '--force' || '' }}
+          missing=""
+          for v in TO FROM SMTP SECRET; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "send=0" >> "$GITHUB_OUTPUT"
+            echo "::warning::缺少 secrets:$missing —— 本次只生成 EPUB/RSS，不推送 Kindle"
+            {
+              echo "### ⚠️ 缺少 secrets"
+              echo "缺少：\`$missing\`"
+              echo ""
+              echo "本次跳过推送，但仍会产出 EPUB / feed.xml 供下载。"
+              echo "修：Settings → Environments → \`kindle\` → Add environment secret（名字见 deploy/github-actions-setup.md）"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "send=1" >> "$GITHUB_OUTPUT"
+            echo "secrets 齐全（TO/FROM/SMTP/SECRET），将推送到 Kindle"
+          fi
 
-      - name: 上传产物（EPUB + feed.xml）
+      - name: 预检（连通性自检）
+        if: steps.sel.outputs.run == '1'
+        continue-on-error: true
+        run: |
+          mkdir -p "${{ matrix.project }}/logs"
+          python deploy/preflight.py 2>&1 | tee "${{ matrix.project }}/logs/preflight.txt"
+          {
+            echo "### 预检结果（连通性）"
+            echo '```'
+            tail -n 22 "${{ matrix.project }}/logs/preflight.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: 跑流水线（发现 → 抓取 → RSS → EPUB → 推送）
+        id: pipe
+        if: steps.sel.outputs.run == '1'
+        env:
+          # secrets 缺失时这里为 0，run_pipeline 会跳过推送而不是报错
+          WSJ_KINDLE_ENABLED: "${{ steps.creds.outputs.send }}"
+          TO: ${{ secrets.TO }}
+          FROM: ${{ secrets.FROM }}
+          SMTP: ${{ secrets.SMTP }}
+          PORT: ${{ secrets.PORT }}
+          ENCRYPT: ${{ secrets.ENCRYPT }}
+          SECRET: ${{ secrets.SECRET }}
+        run: |
+          extra=""
+          [ "${{ inputs.force }}" = "true" ] && extra="--force"
+          python wsj-kindle/scripts/run_pipeline.py --project "${{ matrix.project }}" $extra \
+            2>&1 | tee "${{ matrix.project }}/logs/pipeline.log"
+          code=${PIPESTATUS[0]}
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          {
+            echo "### 流水线 \`${{ matrix.project }}\`（exit=$code）"
+            echo '```'
+            tail -n 30 "${{ matrix.project }}/logs/pipeline.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+
+      - name: 上传产物（EPUB + RSS + 日志）
         if: always() && steps.sel.outputs.run == '1'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.project }}-${{ github.run_number }}
           path: |
             ${{ matrix.project }}/out/*.epub
             ${{ matrix.project }}/public/feed.xml
+            ${{ matrix.project }}/public/digest.html
             ${{ matrix.project }}/logs/pipeline.log
+            ${{ matrix.project }}/logs/preflight.txt
           if-no-files-found: warn
           retention-days: 30
 
@@ -112,7 +181,16 @@ jobs:
           git add -f "${{ matrix.project }}/data/seen.json" 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "状态无变化"
+            exit 0
+          fi
+          git commit -q -m "chore(${{ matrix.project }}): update digest state [skip ci]"
+          if git push; then
+            echo "状态已回写仓库"
           else
-            git commit -m "chore(${{ matrix.project }}): update digest state [skip ci]"
-            git push
+            echo "::warning::状态回写失败，多为 GITHUB_TOKEN 没有写权限"
+            {
+              echo "### ⚠️ 状态没能回写仓库"
+              echo "后果：下次运行可能重复推送同一批文章。"
+              echo "修：Settings → Actions → General → Workflow permissions → **Read and write**"
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
