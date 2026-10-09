@@ -101,18 +101,30 @@ def apply_env_overrides(config: dict) -> tuple[dict, list[str]]:
     return {"kindle": kindle}, applied
 
 
-def attempt_send(smtp: dict, msg: EmailMessage, use_ssl: bool, port: int) -> None:
+def attempt_send(smtp: dict, msg: EmailMessage, use_ssl: bool, port: int,
+                 debug: bool = False) -> None:
+    """debug=True 时打印 SMTP 原始对话，用来判断到底断在哪一步：
+    连不上（端口/加密不匹配）还是认证被拒（凭据问题）。"""
     host = smtp["host"]
+    if debug:
+        print(f"--- SMTP 对话开始：{'SSL(隐式TLS)' if use_ssl else 'STARTTLS'} port={port} ---",
+              file=sys.stderr)
     if use_ssl:
         with smtplib.SMTP_SSL(host, port, timeout=120,
                               context=ssl.create_default_context()) as s:
+            if debug:
+                s.set_debuglevel(1)
             s.login(smtp["username"], smtp["password"])
             s.send_message(msg)
     else:
         with smtplib.SMTP(host, port, timeout=120) as s:
+            if debug:
+                s.set_debuglevel(1)
             s.starttls(context=ssl.create_default_context())
             s.login(smtp["username"], smtp["password"])
             s.send_message(msg)
+    if debug:
+        print("--- SMTP 对话结束（成功）---", file=sys.stderr)
 
 
 def smtp_probe(host: str, timeout: float = 20.0) -> list[dict]:
@@ -146,6 +158,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--probe", action="store_true",
                     help="只测 SMTP 连通性（465/587 哪个通），不需要密码")
+    ap.add_argument("--debug", action="store_true",
+                    help="打印 SMTP 原始对话（判断断在连接阶段还是认证阶段）")
     ap.add_argument("--compact", action="store_true")
     args = ap.parse_args()
 
@@ -230,7 +244,7 @@ def main() -> int:
     for use_ssl, port in order:
         mode = f"{'SSL' if use_ssl else 'STARTTLS'}:{port}"
         try:
-            attempt_send(smtp, msg, use_ssl, port)
+            attempt_send(smtp, msg, use_ssl, port, debug=args.debug)
         except smtplib.SMTPAuthenticationError as exc:
             print(json.dumps({"ok": False, "error": f"SMTP 认证失败: {exc}",
                               "smtp_mode": mode, "tried": tried, **base_result,
