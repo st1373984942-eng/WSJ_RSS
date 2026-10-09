@@ -31,6 +31,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import smtplib
 import ssl
 import sys
@@ -101,6 +102,20 @@ def apply_env_overrides(config: dict) -> tuple[dict, list[str]]:
     return {"kindle": kindle}, applied
 
 
+def install_redacting_debug(s: smtplib.SMTP) -> None:
+    """开启 SMTP 调试输出，但把凭据遮掉。
+
+    set_debuglevel(1) 会把 `AUTH PLAIN <base64>` 原样打进日志，而 base64 一解就是
+    用户名+密码/授权码 —— 日志一旦外传就等于泄露凭据。这里把它替换掉。
+    """
+    def _redact(*args: object) -> None:
+        text = " ".join(str(a) for a in args)
+        text = re.sub(r"(?i)(AUTH\s+[A-Z0-9-]+\s+)\S+", r"\1<credentials-redacted>", text)
+        print(text, file=sys.stderr)
+
+    s._print_debug = _redact  # type: ignore[method-assign]
+
+
 def authenticate(s: smtplib.SMTP, smtp: dict) -> None:
     """显式做一次 AUTH PLAIN 并检查返回码。
 
@@ -131,13 +146,13 @@ def attempt_send(smtp: dict, msg: EmailMessage, use_ssl: bool, port: int,
         with smtplib.SMTP_SSL(host, port, timeout=120,
                               context=ssl.create_default_context()) as s:
             if debug:
-                s.set_debuglevel(1)
+                install_redacting_debug(s)
             authenticate(s, smtp)
             s.send_message(msg)
     else:
         with smtplib.SMTP(host, port, timeout=120) as s:
             if debug:
-                s.set_debuglevel(1)
+                install_redacting_debug(s)
             s.ehlo_or_helo_if_needed()
             s.starttls(context=ssl.create_default_context())
             authenticate(s, smtp)
