@@ -22,6 +22,32 @@ SCRIPTS = ROOT / "scripts"
 # report() 要用到，由 main() 赋值
 _KINDLE_ENABLED = False
 _APPLIED: list[str] = []
+_ROLLED_BACK = 0
+
+
+def rollback_seen(project: pathlib.Path, slugs: list[str]) -> int:
+    """把这一轮文章的 URL 从 data/seen.json 里撤掉，返回撤销条数。
+
+    用途：投递失败时**不能**算"已完成"。抓取阶段会把 URL 写进 seen.json（还会提交回仓库），
+    如果之后发信失败却不撤回，下次运行就会认为这些文章已经处理过，永远不会重发。
+    """
+    seen_path = project / "data" / "seen.json"
+    slugs_path = project / "data" / "run_slugs.json"
+    if not (seen_path.exists() and slugs_path.exists()):
+        return 0
+    try:
+        seen = json.loads(seen_path.read_text(encoding="utf-8-sig"))
+        wanted = {s for s in json.loads(slugs_path.read_text(encoding="utf-8-sig")) if s}
+    except (json.JSONDecodeError, OSError):
+        return 0
+    urls = seen.get("urls", {})
+    drop = [u for u, meta in urls.items()
+            if any(s in str(meta.get("path", "") or "") for s in wanted)]
+    for u in drop:
+        urls.pop(u, None)
+    if drop:
+        seen_path.write_text(json.dumps(seen, ensure_ascii=False, indent=1), encoding="utf-8")
+    return len(drop)
 
 
 def run_step(name: str, argv: list[str], required: bool = True) -> dict:
@@ -126,8 +152,21 @@ def main() -> int:
             "ok": True, "skipped": True, "reason": "本轮没有新文章可合成"}})
 
     if epub_path and not args.no_send and kindle_enabled:
-        steps.append(run_step("send", [str(SCRIPTS / "send_kindle.py"),
-                                       "--project", str(project), "--epub", epub_path]))
+        send_step = run_step("send", [str(SCRIPTS / "send_kindle.py"),
+                                      "--project", str(project), "--epub", epub_path])
+        steps.append(send_step)
+        if send_step["returncode"] != 0:
+            # 投递失败 → 撤回状态，让下一次运行自动重抓并重发（否则这批文章永远不会再出现）
+            try:
+                slugs = json.loads((project / "data" / "run_slugs.json")
+                                   .read_text(encoding="utf-8-sig"))
+            except (json.JSONDecodeError, OSError):
+                slugs = []
+            global _ROLLED_BACK
+            _ROLLED_BACK = rollback_seen(project, slugs)
+            if _ROLLED_BACK:
+                print(f"\n投递失败，已把本轮 {_ROLLED_BACK} 篇的 URL 从 seen.json 撤回 —— "
+                      "下次运行会自动重抓并重发")
     elif not args.no_send and not kindle_enabled:
         steps.append({"step": "send", "returncode": 0, "result": {
             "ok": True, "skipped": True,
@@ -150,6 +189,7 @@ def report(steps: list[dict], stop_reason: str | None, benign: bool = False) -> 
         "ok": not failed and (benign or not stop_reason),
         "stopped": stop_reason,
         "failed_steps": failed,
+        "state_rolled_back": _ROLLED_BACK,
         "failing_step": failing["step"] if failing else None,
         "failing_reason": (fres or {}).get("error") or (fres or {}).get("hint")
                           or (failing or {}).get("stderr_tail") or None,
