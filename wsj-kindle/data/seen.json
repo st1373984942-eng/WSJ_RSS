@@ -1,3 +1,244 @@
 {
- "urls": {}
+ "urls": {
+  "https://cn.wsj.com/articles/nobel-peace-prize-winner-2026-05fc5627": {
+   "title": "法学家皮莱获诺贝尔和平奖",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/法学家皮莱获诺贝尔和平奖/法学家皮莱获诺贝尔和平奖.md",
+   "paywall_preview": false,
+   "words": 202,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:35:21"
+  },
+  "https://cn.wsj.com/articles/扔掉1升的水壶吧-你摄入的水分够多了-5e9b892e": {
+   "title": "扔掉1升的水壶吧，你摄入的水分够多了",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/扔掉1升的水壶吧你摄入的水分够多了/扔掉1升的水壶吧你摄入的水分够多了.md",
+   "paywall_preview": false,
+   "words": 256,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:35:43"
+  },
+  "https://cn.wsj.com/articles/战火收紧全球能源供应-美国炼油商开启-印钞机-模式-08c12ea8": {
+   "title": "战火收紧全球能源供应，美国炼油商开启“印钞机”模式",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/战火收紧全球能源供应美国炼油商开启印钞机模式/战火收紧全球能源供应美国炼油商开启印钞机模式.md",
+   "paywall_preview": false,
+   "words": 241,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:36:05"
+  },
+  "https://cn.wsj.com/articles/aglimpse-inside-gaza-shows-how-israels-military-footprint-is-expanding-b8067633": {
+   "title": "深入加沙内部：以色列军事存在如何持续扩大",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/深入加沙内部以色列军事存在如何持续扩大/深入加沙内部以色列军事存在如何持续扩大.md",
+   "paywall_preview": false,
+   "words": 380,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:36:27"
+  },
+  "https://cn.wsj.com/articles/walmart-automation-robots-warehouses-e9d6ad81": {
+   "title": "对沃尔玛而言，用机器人取代人类是一场耗资数十亿美元的苦战",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/对沃尔玛而言用机器人取代人类是一场耗资数十亿美元的苦战/对沃尔玛而言用机器人取代人类是一场耗资数十亿美元的苦战.md",
+   "paywall_preview": false,
+   "words": 183,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:36:48"
+  },
+  "https://cn.wsj.com/articles/中国经济困局日益严峻-政府却仅施权宜之策-8dba6885": {
+   "title": "中国经济困境日益严峻，政府却仅施权宜之策",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/中国经济困境日益严峻政府却仅施权宜之策/中国经济困境日益严峻政府却仅施权宜之策.md",
+   "paywall_preview": false,
+   "words": 283,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:37:10"
+  },
+  "https://cn.wsj.com/articles/the-wall-street-veteran-trying-to-solve-the-pentagons-missile-problem-b3bd8923": {
+   "title": "这位华尔街老将正试图破解五角大楼的导弹补给难题",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/这位华尔街老将正试图破解五角大楼的导弹补给难题/这位华尔街老将正试图破解五角大楼的导弹补给难题.md",
+   "paywall_preview": false,
+   "words": 299,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:37:32"
+  },
+  "https://cn.wsj.com/articles/choosing-the-right-bond-strategy-for-todays-high-yield-world-f1e11f2e": {
+   "title": "当前高收益率环境下，你该如何选择合适的债券策略",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/当前高收益率环境下你该如何选择合适的债券策略/当前高收益率环境下你该如何选择合适的债券策略.md",
+   "paywall_preview": false,
+   "words": 384,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:37:54"
+  },
+  "https://cn.wsj.com/articles/伊朗与胡塞武装密集反扑-以期重夺霍尔木兹海峡控制权-6c430275": {
+   "title": "伊朗与胡塞武装发起一连串袭击，以期重夺霍尔木兹海峡控制权",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/伊朗与胡塞武装发起一连串袭击以期重夺霍尔木兹海峡控制权/伊朗与胡塞武装发起一连串袭击以期重夺霍尔木兹海峡控制权.md",
+   "paywall_preview": false,
+   "words": 258,
+   "source": "live",
+   "fetched": "2026-10-09T15:38:16"
+  },
+  "https://cn.wsj.com/articles/ai-agents-assistants-shopping-chat-errors-dbe99ef7": {
+   "title": "个人AI智能体很好用，却也有可能把你的银行账单发到工作群",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/个人ai智能体很好用却也有可能把你的银行账单发到工作群/个人ai智能体很好用却也有可能把你的银行账单发到工作群.md",
+   "paywall_preview": false,
+   "words": 222,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:38:38"
+  },
+  "https://cn.wsj.com/articles/5万美元夏季实习岗位开招-华尔街人才争夺战提前上演-350047f6": {
+   "title": "5万美元夏季实习岗位开招，华尔街人才争夺战提前上演",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/5万美元夏季实习岗位开招华尔街人才争夺战提前上演/5万美元夏季实习岗位开招华尔街人才争夺战提前上演.md",
+   "paywall_preview": false,
+   "words": 254,
+   "source": "live",
+   "fetched": "2026-10-09T15:39:00"
+  },
+  "https://cn.wsj.com/articles/马克-扎克伯格为何在facebook电影续作-社交清算-中沦为配角-944fb01d": {
+   "title": "马克·扎克伯格为何在Facebook电影续作《社交清算》中沦为配角？",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/马克扎克伯格为何在facebook电影续作社交清算中沦为配角/马克扎克伯格为何在facebook电影续作社交清算中沦为配角.md",
+   "paywall_preview": false,
+   "words": 186,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:39:22"
+  },
+  "https://cn.wsj.com/articles/收益率上升之际应该如何购买债券-a9226c0c": {
+   "title": "收益率上升之际应该如何购买债券",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/收益率上升之际应该如何购买债券/收益率上升之际应该如何购买债券.md",
+   "paywall_preview": false,
+   "words": 272,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:39:44"
+  },
+  "https://cn.wsj.com/articles/朝韩非军事区地雷爆炸事件释放朝鲜严防脱北的信号-d9af20ae": {
+   "title": "朝韩非军事区地雷爆炸事件释放朝鲜严防脱北的信号",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/朝韩非军事区地雷爆炸事件释放朝鲜严防脱北的信号/朝韩非军事区地雷爆炸事件释放朝鲜严防脱北的信号.md",
+   "paywall_preview": false,
+   "words": 266,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:40:06"
+  },
+  "https://cn.wsj.com/articles/ice执法人员在纽约市开枪打伤一人-1c6baa6c": {
+   "title": "ICE执法人员在纽约市开枪打伤一人",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/ice执法人员在纽约市开枪打伤一人/ice执法人员在纽约市开枪打伤一人.md",
+   "paywall_preview": false,
+   "words": 255,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:40:28"
+  },
+  "https://cn.wsj.com/articles/spacex大举发力-谋求成为无线运营商-4d5cc9f3": {
+   "title": "SpaceX大举布局，谋求成为无线通信运营商",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/spacex大举布局谋求成为无线通信运营商/spacex大举布局谋求成为无线通信运营商.md",
+   "paywall_preview": false,
+   "words": 208,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:40:50"
+  },
+  "https://cn.wsj.com/articles/美国检方对马杜罗提出酷刑指控-8f123f05": {
+   "title": "美国检方对马杜罗提出酷刑指控",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/美国检方对马杜罗提出酷刑指控/美国检方对马杜罗提出酷刑指控.md",
+   "paywall_preview": false,
+   "words": 248,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:41:12"
+  },
+  "https://cn.wsj.com/articles/美国预算赤字升至接近2万亿美元-b696f363": {
+   "title": "美国预算赤字升至接近2万亿美元",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/美国预算赤字升至接近2万亿美元/美国预算赤字升至接近2万亿美元.md",
+   "paywall_preview": false,
+   "words": 201,
+   "source": "live",
+   "fetched": "2026-10-09T15:41:34"
+  },
+  "https://cn.wsj.com/articles/micron-nvidia-and-ai-chip-stocks-fall-as-report-on-openais-revenue-causes-undue-concern-5898924f": {
+   "title": "OpenAI收入不及预期报道引发“过度担忧”，美光、英伟达等AI芯片股下跌",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/openai收入不及预期报道引发过度担忧美光英伟达等ai芯片股下跌/openai收入不及预期报道引发过度担忧美光英伟达等ai芯片股下跌.md",
+   "paywall_preview": false,
+   "words": 239,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:41:56"
+  },
+  "https://cn.wsj.com/articles/tanker-attacks-push-deeper-into-the-gulf-and-rattle-oil-markets-89bd912b": {
+   "title": "油轮遇袭事件向海湾深处蔓延，扰动石油市场",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/油轮遇袭事件向海湾深处蔓延扰动石油市场/油轮遇袭事件向海湾深处蔓延扰动石油市场.md",
+   "paywall_preview": false,
+   "words": 202,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:42:18"
+  },
+  "https://cn.wsj.com/articles/万斯称美国将暂停微软等公司参与h1b绿卡申请计划-7ea8c146": {
+   "title": "万斯称美国将暂停微软等公司参与H1B绿卡申请计划",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/万斯称美国将暂停微软等公司参与h1b绿卡申请计划/万斯称美国将暂停微软等公司参与h1b绿卡申请计划.md",
+   "paywall_preview": false,
+   "words": 257,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:42:40"
+  },
+  "https://cn.wsj.com/articles/遭受重创的债券市场为何终迎喘息之机-613a6e7a": {
+   "title": "遭受重创的债券市场为何终迎喘息之机",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/遭受重创的债券市场为何终迎喘息之机/遭受重创的债券市场为何终迎喘息之机.md",
+   "paywall_preview": false,
+   "words": 267,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:43:01"
+  },
+  "https://cn.wsj.com/articles/trump-says-u-s-wont-resume-strikes-on-iran-before-midterms-4346c9bf": {
+   "title": "特朗普称美国在中期选举前不会恢复对伊朗的打击",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/特朗普称美国在中期选举前不会恢复对伊朗的打击/特朗普称美国在中期选举前不会恢复对伊朗的打击.md",
+   "paywall_preview": false,
+   "words": 191,
+   "source": "live",
+   "fetched": "2026-10-09T15:43:23"
+  },
+  "https://cn.wsj.com/articles/canadian-poet-anne-carson-awarded-nobel-prize-in-literature-de70b1b8": {
+   "title": "加拿大诗人安妮·卡森获诺贝尔文学奖",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/加拿大诗人安妮卡森获诺贝尔文学奖/加拿大诗人安妮卡森获诺贝尔文学奖.md",
+   "paywall_preview": false,
+   "words": 204,
+   "source": "live",
+   "fetched": "2026-10-09T15:43:45"
+  },
+  "https://cn.wsj.com/articles/china-scentral-bank-rejects-claims-yuan-is-undervalued-41d64e2c": {
+   "title": "中国央行驳斥人民币汇率被低估的说法",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/中国央行驳斥人民币汇率被低估的说法/中国央行驳斥人民币汇率被低估的说法.md",
+   "paywall_preview": false,
+   "words": 238,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:44:07"
+  },
+  "https://cn.wsj.com/articles/manus-sparent-raises-more-than-500-million-in-funding-round-a34c489f": {
+   "title": "Manus母公司在一轮融资中筹资逾5亿美元",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/manus母公司在一轮融资中筹资逾5亿美元/manus母公司在一轮融资中筹资逾5亿美元.md",
+   "paywall_preview": false,
+   "words": 184,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:44:29"
+  },
+  "https://cn.wsj.com/articles/israel-orders-u-k-consulate-in-jerusalem-closed-over-west-bank-trade-ban-e8a692b9": {
+   "title": "因约旦河西岸贸易禁令，以色列将英国驻耶路撒冷领事馆降级",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/因约旦河西岸贸易禁令以色列将英国驻耶路撒冷领事馆降级/因约旦河西岸贸易禁令以色列将英国驻耶路撒冷领事馆降级.md",
+   "paywall_preview": false,
+   "words": 219,
+   "source": "live",
+   "fetched": "2026-10-09T15:44:51"
+  },
+  "https://cn.wsj.com/articles/oil-prices-rise-more-than-2-amid-houthi-attacks-u-s-gulf-shut-ins-2a29ec31": {
+   "title": "布伦特原油涨逾4%，受美伊紧张局势和飓风伊萨亚斯影响",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/布伦特原油涨逾4受美伊紧张局势和飓风伊萨亚斯影响/布伦特原油涨逾4受美伊紧张局势和飓风伊萨亚斯影响.md",
+   "paywall_preview": false,
+   "words": 190,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:45:13"
+  },
+  "https://cn.wsj.com/articles/kimberlyguilfoyle-pushed-donor-to-wire-100-000-to-her-amex-account-d8b222a7": {
+   "title": "“亲爱的，拜托了”：美驻希腊大使曾向捐款人索要10万美元清偿信用卡债",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/亲爱的拜托了美驻希腊大使曾向捐款人索要10万美元清偿信用卡债/亲爱的拜托了美驻希腊大使曾向捐款人索要10万美元清偿信用卡债.md",
+   "paywall_preview": false,
+   "words": 217,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:45:35"
+  },
+  "https://cn.wsj.com/articles/patients-sue-glp-1-drugmakers-over-risk-of-sudden-vision-loss-2776b06d": {
+   "title": "GLP-1类药物可能导致视力丧失？药企被告上法庭",
+   "path": "/home/runner/work/WSJ_RSS/WSJ_RSS/wsj-kindle/articles/glp-1类药物可能导致视力丧失药企被告上法庭/glp-1类药物可能导致视力丧失药企被告上法庭.md",
+   "paywall_preview": false,
+   "words": 220,
+   "source": "bpc_fetch",
+   "fetched": "2026-10-09T15:45:57"
+  }
+ }
 }
