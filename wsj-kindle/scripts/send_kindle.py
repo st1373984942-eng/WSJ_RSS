@@ -44,9 +44,9 @@ CONN_HINT = (
     "① 端口与加密方式要配套——465 用 SSL（隐式 TLS）、587 用 STARTTLS，配错就是 "
     "'Connection unexpectedly closed'（脚本已自动试过两种组合，见 tried）；"
     "② 25 端口在 GitHub runner 上是被封的，别用；"
-    "③ 有邮箱在**密码/授权码错误**时也直接断连而不返回 535 —— 看下面的 probe："
-    "probe 里某个端口通、但发信断连 ⇒ 基本是凭据问题（确认用的是授权码，不是登录密码）；"
-    "probe 两个端口都不通 ⇒ 是这台机器/这个机房 IP 被该 SMTP 挡了（换 Gmail App Password 或换机器）；"
+    "③ 认证失败会明确报 535（脚本显式读 AUTH 返回码，不会再被服务器断连掩盖）。"
+    "QQ 回 535 时依次确认：FROM 是否就是**生成该授权码的那个邮箱**（常见错误是把 FROM "
+    "留成占位符）、授权码是否过期或被重新生成过、邮箱里 SMTP 服务是否已开启；"
     "④ 用 `python send_kindle.py --probe --project .` 可以随时单独测连通性。"
 )
 
@@ -101,6 +101,24 @@ def apply_env_overrides(config: dict) -> tuple[dict, list[str]]:
     return {"kindle": kindle}, applied
 
 
+def authenticate(s: smtplib.SMTP, smtp: dict) -> None:
+    """显式做一次 AUTH PLAIN 并检查返回码。
+
+    为什么不用 s.login()：login() 在某个机制失败后会自动去试下一个机制，
+    而服务器此时往往直接把连接断掉 —— 抛出来的就变成 SMTPServerDisconnected，
+    真正的 535（账号和授权码不匹配）被掩盖，让人误以为是端口或网络问题。
+    这里直接读返回码，认证失败就老老实实报 535。
+    """
+    user, pwd = smtp["username"], smtp["password"]
+    s.ehlo_or_helo_if_needed()
+    if "PLAIN" in (s.esmtp_features.get("auth") or "").upper():
+        code, resp = s.auth("PLAIN", lambda challenge=None: f"\0{user}\0{pwd}")
+        if code == 235:
+            return
+        raise smtplib.SMTPAuthenticationError(code, resp)
+    s.login(user, pwd)  # 服务器不广告 PLAIN 时退回标准登录
+
+
 def attempt_send(smtp: dict, msg: EmailMessage, use_ssl: bool, port: int,
                  debug: bool = False) -> None:
     """debug=True 时打印 SMTP 原始对话，用来判断到底断在哪一步：
@@ -114,14 +132,15 @@ def attempt_send(smtp: dict, msg: EmailMessage, use_ssl: bool, port: int,
                               context=ssl.create_default_context()) as s:
             if debug:
                 s.set_debuglevel(1)
-            s.login(smtp["username"], smtp["password"])
+            authenticate(s, smtp)
             s.send_message(msg)
     else:
         with smtplib.SMTP(host, port, timeout=120) as s:
             if debug:
                 s.set_debuglevel(1)
+            s.ehlo_or_helo_if_needed()
             s.starttls(context=ssl.create_default_context())
-            s.login(smtp["username"], smtp["password"])
+            authenticate(s, smtp)
             s.send_message(msg)
     if debug:
         print("--- SMTP 对话结束（成功）---", file=sys.stderr)
@@ -248,7 +267,10 @@ def main() -> int:
         except smtplib.SMTPAuthenticationError as exc:
             print(json.dumps({"ok": False, "error": f"SMTP 认证失败: {exc}",
                               "smtp_mode": mode, "tried": tried, **base_result,
-                              "hint": "多数邮箱要用「授权码」而不是登录密码（Gmail 用 App Password）"},
+                              "hint": ("多数邮箱要用「授权码」而不是登录密码（Gmail 用 App Password）。"
+                                       "QQ 回 535 时依次确认：① FROM 是否就是生成该授权码的那个邮箱"
+                                       "（把 FROM 留成占位符就会 535）；② 授权码是否过期/被重新生成；"
+                                       "③ 邮箱设置里 SMTP 服务是否已开启")},
                              ensure_ascii=False, indent=None if args.compact else 2))
             return 1
         except Exception as exc:  # noqa: BLE001
