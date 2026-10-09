@@ -74,6 +74,7 @@ def apply_env_overrides(config: dict) -> tuple[dict, list[str]]:
     if to:
         kindle["addresses"] = [a.strip() for a in to.replace(";", ",").split(",") if a.strip()]
 
+    overridden: set[str] = set()
     for field, names in {
         "host": ("WSJ_SMTP_HOST", "SMTP"),
         "port": ("WSJ_SMTP_PORT", "PORT"),
@@ -86,6 +87,7 @@ def apply_env_overrides(config: dict) -> tuple[dict, list[str]]:
         if val is None:
             continue
         smtp[field] = int(val) if field == "port" and val.isdigit() else val
+        overridden.add(field)
 
     enc = take("encrypt", "WSJ_SMTP_ENCRYPT", "ENCRYPT")
     if enc:
@@ -96,8 +98,14 @@ def apply_env_overrides(config: dict) -> tuple[dict, list[str]]:
             smtp["ssl"] = False
     if "ssl" not in smtp:
         smtp["ssl"] = str(smtp.get("port", 465)) != "587"
-    if smtp.get("from") and not smtp.get("username"):
-        smtp["username"] = smtp["from"]
+
+    # 登录用户名跟着发件地址走。
+    # 注意这里必须区分「显式给了 FROM」和「username 恰好非空」：config.json 里常常留着
+    # 模板占位符（you@qq.com），非空但不是真值，于是老的 `if not username` 判断永远不触发，
+    # 结果 FROM 改对了也照样拿占位符去登录 → 一直 535。
+    if "username" not in overridden and ("from" in overridden or not smtp.get("username")):
+        if smtp.get("from"):
+            smtp["username"] = smtp["from"]
 
     return {"kindle": kindle}, applied
 
@@ -246,10 +254,21 @@ def main() -> int:
     if epub.exists() and epub.stat().st_size > 50 * 1024 * 1024:
         problems.append(f"附件 {epub.stat().st_size/1e6:.1f}MB 超过 50MB 邮件上限")
 
+    # 占位符快速失败：模板里的 you@qq.com 非空但显然不是真值，
+    # 与其拿它去换一个 535 再让人排查半天，不如当场说清楚
+    placeholders = {"you@qq.com", "you@example.com", "your@email.com", "you@gmail.com"}
+    if (smtp.get("username") or "").strip().lower() in placeholders or \
+       (smtp.get("from") or "").strip().lower() in placeholders:
+        problems.append(
+            f"发件地址/登录用户名还是模板占位符（{smtp.get('username') or smtp.get('from')}）——"
+            "必须改成你自己的邮箱。QQ 邮箱要求登录名就是**生成该授权码的那个邮箱**，"
+            "只有 FROM 对了、登录名还是占位符同样会 535")
+
     base_result = {
         "epub": str(epub),
         "recipients": recipients,
         "smtp": f"{smtp.get('host')}:{smtp.get('port')} ssl={smtp.get('ssl')}",
+        "smtp_user": smtp.get("username"),
         "env_overrides": sorted(set(applied)),
     }
 
