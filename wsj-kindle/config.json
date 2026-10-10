@@ -29,7 +29,7 @@
                   "good_enough_words":  500,
                   "paywall_note":  "\u003e 注：此为付费内容，以上仅为免费预览段落（点链接可在 WSJ 客户端续读全文）。",
                   "concurrency":  1,
-                  "max_preview_attempts":  1
+                  "max_preview_attempts":  -1
               },
     "feed":  {
                  "base_url":  "http://127.0.0.1:8080",

@@ -28,7 +28,7 @@
                   "good_enough_words":  400,
                   "paywall_note":  "\u003e Note: paywalled by WSJ — the text above is the free preview. Full article needs a subscription.",
                   "concurrency":  1,
-                  "max_preview_attempts":  1
+                  "max_preview_attempts":  -1
               },
     "feed":  {
                  "base_url":  "http://127.0.0.1:8081",

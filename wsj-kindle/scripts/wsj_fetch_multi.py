@@ -133,18 +133,50 @@ def tidy(text: str) -> str:
 
 
 # --------------------------------------------------------------------- 各来源
+#: archive.today 的多个镜像。它是同一家服务，但不同域名的边缘节点不一样，
+#: 某些机房 IP 会被其中一个域名挡（返回验证页），换一个往往就能过。
+ARCHIVE_MIRRORS = ["archive.ph", "archive.is", "archive.li", "archive.md", "archive.today"]
+
+#: 被反爬/风控挡住时页面里会出现的特征词
+ARCHIVE_BLOCK_MARKERS = [
+    "captcha", "cf-chl", "challenge-platform", "attention required",
+    "ddos protection", "checking your browser", "verify you are human",
+]
+
+#: 提取正文短于这个字数，就认为这个镜像没给出可用快照
+ARCHIVE_MIN_UNITS = 200
+
+
 def src_archive_today(url: str) -> dict | None:
-    r = http_get(f"https://archive.ph/newest/{url}")
-    if isinstance(r, Exception):
-        return {"error": str(r)}
-    if r.status_code != 200:
-        return {"error": f"HTTP {r.status_code}"}
-    if len(r.content) < 20000:  # 未存档时 archive.today 只给一个小提示页
-        return {"error": "no_snapshot"}
-    text = extract_text(r.text, url)
-    # 图片用"实际响应地址"做 base，archive.today 的图片是它自己的相对路径
-    return {"source": "archive_today", "text": text,
-            "images": _extract_image_urls(r.text, str(r.url))}
+    """依次尝试 archive.today 的各个镜像，返回第一个能拿到正文的。
+
+    失败原因会汇总在 error 里（例如 `archive.ph:blocked; archive.is:HTTP 403`），
+    这样云端日志能直接看出是"IP 被挡"还是"确实没存档"。
+    """
+    problems: list[str] = []
+    for host in ARCHIVE_MIRRORS:
+        r = http_get(f"https://{host}/newest/{url}")
+        if isinstance(r, Exception):
+            problems.append(f"{host}:{type(r).__name__}")
+            continue
+        if r.status_code != 200:
+            problems.append(f"{host}:HTTP {r.status_code}")
+            continue
+        low = r.text[:4000].lower()
+        if any(m in low for m in ARCHIVE_BLOCK_MARKERS):
+            problems.append(f"{host}:blocked")
+            continue
+        if len(r.content) < 20000:  # 未存档时只给一个小提示页
+            problems.append(f"{host}:no_snapshot")
+            continue
+        text = extract_text(r.text, url)
+        if length_units(text) < ARCHIVE_MIN_UNITS:
+            problems.append(f"{host}:thin({length_units(text)})")
+            continue
+        # 图片用"实际响应地址"做 base，archive.today 的图片是它自己的相对路径
+        return {"source": f"archive_today/{host}", "text": text,
+                "images": _extract_image_urls(r.text, str(r.url))}
+    return {"error": "; ".join(problems) or "no_mirror_tried"}
 
 
 def src_wayback(url: str) -> dict | None:
@@ -356,10 +388,14 @@ def main() -> int:
         # 拿到的是付费预览时先"推迟"，不要立刻发出去。
         # 实测（2026-10-09）：同一批文章当晚抓到 19/30 是预览，几小时后同样的 URL
         # 10/10 都是 archive.today 全文 —— 也就是存档站只是慢了几小时。
-        # 推迟不会写 seen.json，所以下次运行会重新发现并重抓；等够次数仍只有预览才接受。
-        if paywalled and max_preview_tries >= 0:
+        # 推迟不会写 seen.json，所以下次运行会重新发现并重抓。
+        # max_preview_attempts 的语义：
+        #   -1 = 永不接受预览（一直重试；默认，宁可这天不发也不发概要）
+        #    0 = 不推迟，立刻接受预览
+        #    N = 推迟 N 次后接受
+        if paywalled:
             tries = int(pending.get(url, {}).get("tries", 0))
-            if tries < max_preview_tries:
+            if max_preview_tries < 0 or tries < max_preview_tries:
                 pending[url] = {"tries": tries + 1,
                                 "last": dt.datetime.now().isoformat(timespec="seconds"),
                                 "title": title}
@@ -368,7 +404,7 @@ def main() -> int:
                                 "words": words, "source": best.get("source"),
                                 "paywall_preview": True, "attempts": attempts})
                 continue
-            print(f"  [接受预览] {title[:40]} —— 已推迟 {tries} 次仍无全文")
+            print(f"  [接受预览] {title[:40]} —— 已推迟 {tries} 次仍无全文", file=sys.stderr)
         pending.pop(url, None)
 
         slug = _slugify(title)
@@ -393,6 +429,9 @@ def main() -> int:
     seen_path.parent.mkdir(parents=True, exist_ok=True)
     seen_path.write_text(json.dumps(seen, ensure_ascii=False, indent=1), encoding="utf-8")
     # counters will be reset as each deferred URL is fetched again
+    # 剪掉太老的推迟记录：那些 URL 早已出了 sitemap 窗口，不会再被重抓
+    cutoff = (dt.datetime.now() - dt.timedelta(days=7)).isoformat()
+    pending = {u: v for u, v in pending.items() if str(v.get("last", "")) >= cutoff}
     pending_path.write_text(json.dumps(pending, ensure_ascii=False, indent=1), encoding="utf-8")
     # 只有真抓到东西才覆盖 run_slugs.json：
     # 否则"本轮全军覆没"会把上次成功的选集清空，之后手工跑 build_epub.py 就没文章可合了

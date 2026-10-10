@@ -56,11 +56,15 @@ def run_step(name: str, argv: list[str], required: bool = True) -> dict:
                           encoding="utf-8", errors="replace", cwd=str(ROOT))
     out = (proc.stdout or "").strip()
     parsed: dict | None = None
-    if out.startswith("{"):
+    # 子脚本的 stdout 可能混进人类可读的提示行，所以从第一个 '{' 开始解析，
+    # 失败再从最后一个 '{' 试一次 —— 否则会把"抓到了但全是预览"误读成"什么都没抓到"
+    for idx in ([out.find("{")] if out.find("{") >= 0 else []) + \
+               ([out.rfind("{")] if out.rfind("{") > out.find("{") else []):
         try:
-            parsed = json.loads(out)
+            parsed = json.loads(out[idx:])
+            break
         except json.JSONDecodeError:
-            parsed = None
+            continue
     print(out if out else (proc.stderr or "").strip(), flush=True)
     if proc.returncode != 0 and (proc.stderr or "").strip():
         print(proc.stderr.strip(), file=sys.stderr, flush=True)
@@ -89,7 +93,7 @@ def main() -> int:
 
     effective, applied = apply_env_overrides(config)
     kindle_enabled = bool(effective["kindle"].get("enabled"))
-    global _KINDLE_ENABLED, _APPLIED
+    global _KINDLE_ENABLED, _APPLIED, _ROLLED_BACK
     _KINDLE_ENABLED, _APPLIED = kindle_enabled, applied
     # 不同站点用不同的发现/抓取脚本：中文站走 RSS + bpc-fetch，
     # 英文政治板块走 sitemap + archive.today（见各自 README）
@@ -122,6 +126,21 @@ def main() -> int:
         # 而抓失败的 URL 不会写进 seen.json，下次运行会自动重试。
         fetch_result = steps[-1]["result"] or {}
         no_new_content = fetch_result.get("success", 0) == 0
+        # 保险：万一 max_preview_attempts 被调成"推迟 N 次后接受预览"，而本轮接受的
+        # 又全是预览，就不要推一本通篇概要的书 —— 跳过、把状态退回去、下次重试。
+        if (fetch_result.get("success", 0) > 0
+                and fetch_result.get("full_text", 0) == 0):
+            print(f"\n本轮抓到 {fetch_result.get('success')} 篇但**全部是付费预览**"
+                  f"（full_text=0）—— 跳过本次推送，状态回滚，下次重新抓取")
+            try:
+                slugs = json.loads((project / "data" / "run_slugs.json")
+                                   .read_text(encoding="utf-8-sig"))
+            except (json.JSONDecodeError, OSError):
+                slugs = []
+            _ROLLED_BACK = rollback_seen(project, slugs)
+            if _ROLLED_BACK:
+                print(f"已把本轮 {_ROLLED_BACK} 篇的 URL 从 seen.json 撤回")
+            return report(steps, "本轮只有付费预览，已跳过推送", benign=True)
         if no_new_content:
             print("本轮没有抓到任何文章，跳过 RSS / EPUB / 推送（这些 URL 未写入 seen.json，下次自动重试）")
             if fetch_result.get("errors"):
@@ -162,7 +181,6 @@ def main() -> int:
                                    .read_text(encoding="utf-8-sig"))
             except (json.JSONDecodeError, OSError):
                 slugs = []
-            global _ROLLED_BACK
             _ROLLED_BACK = rollback_seen(project, slugs)
             if _ROLLED_BACK:
                 print(f"\n投递失败，已把本轮 {_ROLLED_BACK} 篇的 URL 从 seen.json 撤回 —— "

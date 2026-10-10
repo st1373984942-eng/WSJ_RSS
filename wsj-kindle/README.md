@@ -229,7 +229,7 @@ schtasks /run /tn "WSJ CN to Kindle"        # 立刻试跑
 | `fetch.sources` | 取文顺序：`archive_today` → `bpc_fetch` → `live` |
 | `fetch.delay_seconds` | archive.today 的请求间隔（默认 3 秒，别调太小） |
 | `fetch.good_enough_words` | 拿到这么多"字/词"就不再试后面来源（默认 500） |
-| `fetch.max_preview_attempts` | **只需预览时推迟几次**（默认 1）。见下面「为什么书里会混进概要」 |
+| `fetch.max_preview_attempts` | 要不要接受预览：**`-1`（默认）= 永不接受**，`0` = 立刻接受，`N` = 推迟 N 次后接受。见第 6 节 |
 | `fetch.cookie` | 可选；填了订阅 cookie 后 `live` 也能直接拿全文 |
 | `fetch.paywall_note` | 只拿到预览时附加的提示语 |
 | `feed.base_url` / `server.port` | 本项目用 8080（英文项目用 8081） |
@@ -259,7 +259,7 @@ schtasks /run /tn "WSJ CN to Kindle"        # 立刻试跑
 
 ## 6. 为什么书里会混进"概要"，以及现在的处理
 
-**成因**：archive.today 是靠别人访问时顺手存档的，**有滞后**。文章刚发布那几小时，快照往往还不存在，于是 `fetch` 退到线上预览（约 250~330 字），于是书里就出现了"只有开头的概要"。
+**成因**：archive.today 是靠别人访问时顺手存档的，**有滞后**。文章刚发布那几小时，快照往往还不存在，于是 `fetch` 退到线上预览（约 170~440 字），书里就出现"只有开头的概要"。
 
 实测（2026-10-09）：
 
@@ -268,16 +268,33 @@ schtasks /run /tn "WSJ CN to Kindle"        # 立刻试跑
 | 当晚 23:04（刚发布不久） | **19 篇是付费预览**，只有 11 篇全文 |
 | 几小时后重抓 | **10/10 全部 archive.today 全文**（平均 1948 字） |
 
-**现在的做法**：抓到预览时**不立刻发**，而是记进 `data/preview_pending.json` 并推迟——
-不写正文文件、不写 `seen.json`，所以下次运行会重新发现它；等 archive.today 有了快照就正常发出。
-推迟次数超过 `fetch.max_preview_attempts`（默认 1）后仍未拿到全文，才会接受预览并照常加提示，
-**不会静默丢文章**。
+### 现在的策略：**宁可不发，也不发概要**
 
-因此**某天的书可能比平时薄**：那不是出错，而是把几篇"暂时只有概要"的文章留到了第二天出全文。
-运行摘要里的 `deferred_preview` / `deferred_titles` 会写明推迟了哪几篇。
+`fetch.max_preview_attempts` 控制"要不要接受预览"，默认 **`-1` = 永不接受**：
 
-想让预览也照发（不等）就把 `fetch.max_preview_attempts` 设为 `0`；
-想多等两天就设为 `2`（注意 48 小时的 sitemap 窗口，设太大可能等不到第二次机会）。
+| 取值 | 行为 |
+|---|---|
+| **`-1`（默认）** | 只有预览就一直推迟：不写正文、不写 `seen.json`，下次运行继续重试；直到 archive.today 有快照才发出 |
+| `0` | 不推迟，立刻接受预览（旧行为，书里会出现概要） |
+| `N > 0` | 推迟 N 次后接受（`N=1` 就是"第二天还是没有就发概要"） |
+
+配套的两道保险：
+
+1. **全是预览就不推书**：即使把参数调成会接受预览，只要本轮 `full_text == 0`，`run_pipeline` 也会跳过
+   RSS/EPUB/推送，并把状态回滚下次重抓（摘要里显示 `stopped: "本轮只有付费预览，已跳过推送"`）。
+2. **archive.today 多镜像轮换**：`archive.ph / archive.is / archive.li / archive.md / archive.today`
+   依次尝试（同一家服务但边缘节点不同），并把失败原因记进日志，例如
+   `archive.ph:blocked; archive.is:HTTP 403` —— 一眼能看出是"IP 被挡"还是"确实没存档"。
+
+### 代价：某天可能什么都不发
+
+因为默认不接受预览，**如果当天的文章在 archive.today 上都还没存档，这一天就不会有书**。
+摘要里会写 `deferred_preview: N` 和具体标题，说明是"在等全文"而不是出错。
+那些文章还会在 48 小时的 sitemap 窗口内被重试；窗口一过就不再出现（宁可漏发，也不发概要）。
+
+> ⚠️ **如果连续多天 `deferred_preview` 都等于当天总数**，说明这台机器根本拿不到 archive.today 的全文
+> （典型是机房 IP 被挡，见下面第 5 节排错表）。那时"只发全文"就等于"永远不发"，
+> 需要改策略：换一台能访问的机器（家里 NAS / 常开的 PC），或把 `max_preview_attempts` 改成 `0` 接受概要。
 
 ---
 
