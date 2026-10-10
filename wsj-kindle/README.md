@@ -132,7 +132,7 @@ wsj-kindle/
 ├── out/wsj-cn-<时间>.epub          # ★ 推给 Kindle 的成品
 ├── data/{discovered,seen,run_slugs}.json
 ├── logs/pipeline.log
-└── scripts/                       # 与 ../wsj-politics 共用
+└── scripts/                       # 流水线脚本（已停用的 ../wsj-politics 也复用这里）
     ├── wsj_discover_sitemap.py    # 【本项目在用】sitemap 发现
     ├── wsj_fetch_multi.py         # 【本项目在用】archive.today/Wayback/线上 多源取全文
     ├── wsj_discover.py            # RSS 发现（保留，Google Referer 那条路）
