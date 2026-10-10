@@ -144,3 +144,66 @@ GitHub Actions 的出口是 Azure 机房 IP，而 archive.today 对机房 IP 有
 | 出网 IP | Azure 机房（可能被 archive.today 限流） | 自选（住宅 IP 最稳） |
 | 维护 | 零维护，改配置就是改仓库 | 要管系统更新、日志、依赖 |
 | 适合 | 想零成本、能接受偶尔漏推 | 想要稳定并自己掌控 |
+
+---
+
+## 本地推代码时必看（两个真实的坑）
+
+### 1. git 必须走代理，否则连不上 GitHub
+
+本机访问境外要走 Clash（`127.0.0.1:7892`），而 **git 默认不读 Windows 的系统代理**，直连 github.com 会 21 秒后超时：
+
+```
+fatal: unable to access 'https://github.com/…': Failed to connect to github.com:443
+```
+
+已经为这个仓库配好了代理（只影响本仓库）：
+
+```powershell
+git config http.proxy  http://127.0.0.1:7892
+git config https.proxy http://127.0.0.1:7892
+```
+
+想对所有仓库生效就加 `--global`。**注意**：代理没开时 git 反而会连不上，
+临时绕过可以用 `git -c http.proxy= push`。
+
+### 2. 推送前先 `pull --rebase -X ours`
+
+workflow 每天会把 `data/seen.json`（已投递账本）提交回仓库，所以你的本地提交
+几乎总会和它冲突：
+
+```
+CONFLICT (content): Merge conflict in wsj-kindle/data/seen.json
+```
+
+它是**可再生成的机器状态**，冲突时取远端那份就行。标准两步：
+
+```powershell
+cd D:\Documents\deepseek-harness\default-workspace
+git pull --rebase -X ours origin main   # -X ours = 冲突处取远端(机器人)的版本
+git push
+```
+
+（`-X ours` 是在 rebase 语境下的说法：ours 指被 rebase 到的上游，也就是机器人那份。）
+
+### 3. 别忘了先 cd 到仓库根目录
+
+在仓库外面执行 git 会直接报：
+
+```
+fatal: not a git repository (or any of the parent directories): .git
+```
+
+仓库根目录是 `D:\Documents\deepseek-harness\default-workspace`（`.github/`、`deploy/`、
+`wsj-kindle/`、`wsj-politics/` 都在这一层）。也可以在任意目录用
+`git -C D:\Documents\deepseek-harness\default-workspace push`。
+
+### 常用小抄
+
+```powershell
+cd D:\Documents\deepseek-harness\default-workspace
+git log --oneline -5                      # 最近提交（含机器人的 chore(...) 状态提交）
+git status --short                        # 本地改动
+git pull --rebase -X ours origin main     # 拉远端并让状态文件不冲突
+git push                                  # 推送
+```
