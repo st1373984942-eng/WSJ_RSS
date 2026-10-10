@@ -102,7 +102,7 @@ jobs:
           {
             echo "### 预检结果（连通性）"
             echo '```'
-            tail -n 22 "wsj-kindle/logs/preflight.txt"
+            tail -n 40 "wsj-kindle/logs/preflight.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit 0

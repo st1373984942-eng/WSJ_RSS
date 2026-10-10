@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -116,45 +117,63 @@ def check_network() -> list[str]:
     return candidates
 
 
-def check_archive_today(sitemap_candidates: list[str]) -> None:
-    print("\n=== 4. archive.today（正文的唯一来源）===")
-    import httpx
-    import trafilatura
+def check_egress_ip() -> None:
+    """记下这台机器的出口 IP。
 
-    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-          "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36")
-    targets = [("固定样本(中文)", SAMPLE_CN), ("固定样本(英文)", SAMPLE_EN)]
-    targets += [(f"最新文章{i+1}", u) for i, u in enumerate(sitemap_candidates[:1])]
+    换机器/换机房时，这一行能直接和 archive.today 的可用性对上号
+    （例如 Azure 的 IP 段被挡、住宅 IP 正常）。取不到不影响运行。
+    """
+    print("\n=== 3.5 出口 IP（用于对比不同机房的 archive.today 可用性）===")
+    import httpx
+
+    for url in ("https://api.ipify.org", "https://ifconfig.me/ip"):
+        try:
+            r = httpx.get(url, timeout=20.0, follow_redirects=True)
+            if r.status_code == 200 and r.text.strip():
+                add("出口 IP", True, r.text.strip()[:64], level="warn")
+                return
+        except Exception:  # noqa: BLE001
+            continue
+    add("出口 IP", True, "取不到（不影响运行）", level="warn")
+
+
+def check_archive_today(sitemap_candidates: list[str]) -> None:
+    """用**流水线同一个函数**去试 archive.today，所以这里的结果等于实际抓取的结果。
+
+    失败会列出每个镜像的原因（blocked / HTTP 403 / no_snapshot / thin），
+    一眼能区分"IP 被挡"和"确实没存档"。
+    """
+    print("\n=== 4. archive.today（正文的唯一来源）===")
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
+                           / "wsj-kindle" / "scripts"))
+    try:
+        from wsj_fetch_multi import ARCHIVE_MIRRORS, length_units, src_archive_today
+    except Exception as exc:  # noqa: BLE001
+        add("加载抓取模块", False, f"{type(exc).__name__}: {exc}",
+            "确认 wsj-kindle/scripts/wsj_fetch_multi.py 存在")
+        return
+
+    print(f"  镜像（依次尝试）: {', '.join(ARCHIVE_MIRRORS)}")
+    # 优先用 sitemap 里的真实新文章 —— 那才是流水线要抓的东西
+    targets = [(f"最新文章{i + 1}", u) for i, u in enumerate(sitemap_candidates[:2])]
+    if not targets:
+        targets = [("固定样本(中文)", SAMPLE_CN), ("固定样本(英文)", SAMPLE_EN)]
 
     ok_any = False
     for label, url in targets:
-        try:
-            r = httpx.get(f"https://archive.ph/newest/{url}",
-                          headers={"User-Agent": ua}, follow_redirects=True, timeout=90.0)
-        except Exception as exc:  # noqa: BLE001
-            add(f"archive.today {label}", False, f"{type(exc).__name__}: {exc}",
-                "archive.today 不可达；它拿不到全文的话，流水线只能出标题/预览")
+        got = src_archive_today(url) or {}
+        if got.get("error"):
+            add(f"archive.today {label}", False, f"各镜像均未取到正文：{got['error']}",
+                "若原因全是 blocked/HTTP 403，就是这个机房的 IP 被挡了 —— 换机房或改用住宅 IP"
+                "（家里的 NAS / 常开的 PC）；也可以用 HTTPS_PROXY 指向可用代理再跑一次")
             continue
-        text = ""
-        try:
-            text = trafilatura.extract(r.text, include_comments=False) or ""
-        except Exception:  # noqa: BLE001
-            pass
-        units = len(re.findall(r"[\u3400-\u9fff]", text)) + len(re.findall(r"[A-Za-z']+", text))
-        if r.status_code == 429:
-            add(f"archive.today {label}", False, "HTTP 429（限流）",
-                "把 config.json 的 fetch.delay_seconds 调大到 6~8 秒")
-            continue
-        if r.status_code == 200 and units > 200:
-            ok_any = True
-            add(f"archive.today {label}", True, f"200，抽出正文 {units} 字/词 ✅")
-        else:
-            add(f"archive.today {label}", False,
-                f"HTTP {r.status_code}，只抽出 {units} 字/词",
-                "这个机房 IP 可能被 archive.today 挡了；换机房或用住宅 IP（家里的 NAS/树莓派）")
+        ok_any = True
+        add(f"archive.today {label}", True,
+            f"{got['source']}，抽出 {length_units(got['text'])} 字/词 ✅")
     if not ok_any:
-        print("\n  ⚠ 四类检查里 archive.today 全失败——这条流水线就没有全文可推。"
-              "详见 deploy/README-server.md 的\"机房选择\"一节。")
+        print("\n  ⚠ archive.today 全部失败 —— 这条流水线拿不到全文，"
+              "当前配置（max_preview_attempts=-1）会**什么也不推**。")
+        print("    详见 deploy/README-server.md 的\"机房选择\"一节，以及 wsj-kindle/README.md 第 6 节。")
 
 
 def main() -> int:
@@ -169,6 +188,7 @@ def main() -> int:
     check_imports()
     check_calibre()
     candidates = check_network()
+    check_egress_ip()
     check_archive_today(candidates)
 
     fails = [r for r in results if not r["ok"] and r["level"] != "warn"]
