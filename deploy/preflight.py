@@ -42,7 +42,7 @@ results: list[dict] = []
 def add(name: str, ok: bool, detail: str, fix: str = "", level: str = "") -> None:
     results.append({"check": name, "ok": ok, "level": level or ("fail" if not ok else "ok"),
                     "detail": detail, "fix": fix})
-    mark = "OK  " if ok else ("WARN" if level == "warn" else "FAIL")
+    mark = "WARN" if level == "warn" else ("OK  " if ok else "FAIL")
     print(f"  [{mark}] {name}: {detail}")
     if not ok and fix:
         print(f"         → {fix}")
@@ -76,11 +76,14 @@ def check_imports() -> None:
 
 
 def check_calibre() -> None:
-    print("\n=== 2. Calibre（生成 EPUB）===")
+    print("\n=== 2. Calibre（生成 EPUB；云端没有也能跑）===")
     exe = shutil.which("ebook-convert")
     if not exe:
-        add("ebook-convert", False, "PATH 里找不到",
-            "sudo -v && wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sudo sh /dev/stdin")
+        # 不是失败：build_epub.py 的 --engine auto 在没有 Calibre 时会用内置的纯 Python
+        # EPUB 引擎（CI 上一直这么跑），所以这里只作提醒。
+        add("ebook-convert", True,
+            "PATH 里没有 → 自动改用内置纯 Python EPUB 引擎（云端就是这样跑的）",
+            level="warn")
         return
     try:
         out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=60)
@@ -130,7 +133,7 @@ def check_egress_ip() -> None:
         try:
             r = httpx.get(url, timeout=20.0, follow_redirects=True)
             if r.status_code == 200 and r.text.strip():
-                add("出口 IP", True, r.text.strip()[:64], level="warn")
+                add("出口 IP", True, r.text.strip()[:64])
                 return
         except Exception:  # noqa: BLE001
             continue
@@ -161,7 +164,7 @@ def check_archive_today(sitemap_candidates: list[str]) -> None:
 
     ok_any = False
     for label, url in targets:
-        got = src_archive_today(url) or {}
+        got = src_archive_today(url, timeout=45.0, attempts=1) or {}
         if got.get("error"):
             add(f"archive.today {label}", False, f"各镜像均未取到正文：{got['error']}",
                 "若原因全是 blocked/HTTP 403，就是这个机房的 IP 被挡了 —— 换机房或改用住宅 IP"

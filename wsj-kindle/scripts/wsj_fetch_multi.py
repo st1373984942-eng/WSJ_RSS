@@ -146,25 +146,34 @@ ARCHIVE_BLOCK_MARKERS = [
 #: 提取正文短于这个字数，就认为这个镜像没给出可用快照
 ARCHIVE_MIN_UNITS = 200
 
+#: archive.today 连续这么多篇都失败后，本轮不再尝试它（避免一次运行被拖成几小时）
+ARCHIVE_BREAKER_LIMIT = 3
 
-def src_archive_today(url: str) -> dict | None:
+
+def src_archive_today(url: str, timeout: float = 60.0, attempts: int = 2) -> dict | None:
     """依次尝试 archive.today 的各个镜像，返回第一个能拿到正文的。
 
-    失败原因会汇总在 error 里（例如 `archive.ph:blocked; archive.is:HTTP 403`），
-    这样云端日志能直接看出是"IP 被挡"还是"确实没存档"。
+    失败原因会汇总在 error 里，例如：
+        archive.ph:HTTP 429; archive.is:ConnectTimeout: ...
+    这样云端日志能直接区分「限流 / IP 被挡 / 域名解析不了 / 确实没存档」。
+
+    注意：http_get 重试耗尽后**返回**（而不是抛出）一个 RuntimeError，真正的原因在
+    str() 里。所以这里必须记 `str(r)`，只记 `type(r).__name__` 会全变成无信息量的
+    "RuntimeError"（真实踩过：五个镜像全失败却看不出为什么）。
     """
     problems: list[str] = []
     for host in ARCHIVE_MIRRORS:
-        r = http_get(f"https://{host}/newest/{url}")
+        r = http_get(f"https://{host}/newest/{url}", timeout=timeout, attempts=attempts)
         if isinstance(r, Exception):
-            problems.append(f"{host}:{type(r).__name__}")
+            detail = str(r).strip().replace("\n", " ")
+            problems.append(f"{host}:{detail[:110] or type(r).__name__}")
             continue
         if r.status_code != 200:
             problems.append(f"{host}:HTTP {r.status_code}")
             continue
         low = r.text[:4000].lower()
         if any(m in low for m in ARCHIVE_BLOCK_MARKERS):
-            problems.append(f"{host}:blocked")
+            problems.append(f"{host}:blocked（返回了验证/风控页）")
             continue
         if len(r.content) < 20000:  # 未存档时只给一个小提示页
             problems.append(f"{host}:no_snapshot")
@@ -350,6 +359,7 @@ def main() -> int:
 
     results: list[dict] = []
     slugs: list[str] = []
+    archive_fail_streak = 0
     for idx, url in enumerate(urls):
         info = meta.get(url, {})
         title = info.get("title") or url.rstrip("/").split("/")[-1]
@@ -363,7 +373,18 @@ def main() -> int:
             if fn is None:
                 attempts.append(f"{name}:unknown")
                 continue
+            # 熔断：archive.today 若连续多篇都失败（机房 IP 被挡/限流），就别再逐篇试了，
+            # 否则 30 篇 × 5 镜像 × 重试会把一次运行拖成几小时
+            if name == "archive_today" and archive_fail_streak >= ARCHIVE_BREAKER_LIMIT:
+                attempts.append("archive_today:skipped(连续失败已熔断)")
+                continue
             got = fn(url) or {}
+            if name == "archive_today":
+                archive_fail_streak = archive_fail_streak + 1 if got.get("error") else 0
+                if archive_fail_streak == ARCHIVE_BREAKER_LIMIT:
+                    print(f"  [熔断] archive.today 连续 {ARCHIVE_BREAKER_LIMIT} 篇失败，"
+                          f"本轮不再尝试它。最近的原因：{str(got.get('error'))[:150]}",
+                          file=sys.stderr)
             if got.get("error"):
                 attempts.append(f"{name}:{got['error']}")
                 continue
