@@ -10,9 +10,12 @@ name: WSJ daily digest
 # 英文政治板块（wsj-politics）已从定时任务里摘除，项目文件保留在仓库里备用，
 # 需要恢复时把它加回下面的 job（或单独复制一份 job）即可。
 on:
-  schedule:
-    # 时间是 UTC。北京时间 07:00 = 前一日 23:00 UTC
-    - cron: "0 23 * * *"
+  # ⚠ 定时已停用：archive.today 对 GitHub runner 的机房 IP 全部返回 HTTP 429，
+  # 云端拿不到全文（详见 wsj-kindle/README.md 第 6 节）。
+  # 现在由本机 Windows 计划任务唤醒执行：WSJ-Kindle-Daily，每天 07:00。
+  # 想恢复云端定时，取消下面两行注释即可（注意会和本机任务同时跑）。
+  # schedule:
+  #   - cron: "0 23 * * *"
   workflow_dispatch:
     inputs:
       force:

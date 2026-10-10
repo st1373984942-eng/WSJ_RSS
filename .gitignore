@@ -26,3 +26,9 @@ __pycache__/
 *.epub
 *.mobi
 !wsj-kindle/out/.gitkeep
+
+# ---- 本地私密配置（SMTP 凭据）：只在本机，绝不入库 ----
+secrets.local.cmd
+wsj-kindle/secrets.local.cmd
+wsj-politics/secrets.local.cmd
+*.local.cmd

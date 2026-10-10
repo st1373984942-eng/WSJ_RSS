@@ -198,22 +198,55 @@ python scripts\run_pipeline.py --project .
 [KindleEar](https://github.com/cdhigh/KindleEar)（Docker）在「自定义 RSS」里填这个地址，
 它定时转成带图带目录的 EPUB 再推到 `@kindle.com`（那时 feed 需要在 KindleEar 能访问到的地址上）。
 
-### 每天自动跑
+### 每天自动跑（本机方案，当前采用的就是它）
+
+本机现在注册了带**唤醒**的计划任务 `WSJ-Kindle-Daily`：每天 07:00，机器睡着也会被叫醒跑一次，
+跑完继续睡（机器彻底关机则叫不醒）。注册命令（一次即可，已执行过）：
 
 ```powershell
-schtasks /create /tn "WSJ CN to Kindle" /tr "D:\Documents\deepseek-harness\default-workspace\wsj-kindle\run_daily.cmd" /sc daily /st 07:00
-schtasks /run /tn "WSJ CN to Kindle"        # 立刻试跑
+$ws = 'D:\Documents\deepseek-harness\default-workspace'
+$action   = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"$ws\wsj-kindle\run_daily.cmd`"" -WorkingDirectory "$ws\wsj-kindle"
+$trigger  = New-ScheduledTaskTrigger -Daily -At 07:00
+$settings = New-ScheduledTaskSettingsSet -WakeToRun -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName 'WSJ-Kindle-Daily' -Action $action -Trigger $trigger -Settings $settings `
+  -Description 'WSJ 中文版每日推送到 Kindle（唤醒计算机执行）'
 ```
 
-### 不想让本机一直开机？两条云端路线都备好了
+常用操作：
 
-| 方案 | 适合 | 说明 |
-|---|---|---|
-| **GitHub Actions**（推荐，零成本零维护） | 本机关机也照跑 | [deploy/github-actions-setup.md](../deploy/github-actions-setup.md) —— runner 常开、secrets 存 SMTP、cron 定时、产物进 Artifacts。**runner 上没有 Calibre 也没关系**，`build_epub.py --engine auto` 会自动改用纯 Python EPUB 引擎（已实测能被 Calibre 正常解析转换）。唯一要留意的是 `data/seen.json` 必须提交回仓库，否则每天重复推送 |
-| **VPS / NAS / 树莓派 + systemd** | 想要住宅 IP 出网（archive.today 最不容易被限流） | [deploy/README-server.md](../deploy/README-server.md) —— `install-server.sh` 一键装，systemd timer 定时，`Persistent=true` 支持错过后补跑 |
+```powershell
+Start-ScheduledTask  -TaskName 'WSJ-Kindle-Daily'     # 立刻试跑（不用等到 07:00）
+Get-ScheduledTaskInfo -TaskName 'WSJ-Kindle-Daily'    # 看上次结果/下次运行时间
+Disable-ScheduledTask -TaskName 'WSJ-Kindle-Daily'    # 临时停用
+Get-Content ".\logs\pipeline.log" -Tail 30            # 看运行日志
+```
 
-两条路线的**第一步都一样**：先跑 `python3 deploy/preflight.py`，它会逐项报告依赖、Calibre、
-两个 sitemap 和 archive.today 的可用性——**能不能拿到全文，关键就看这台机器能不能访问 archive.today**。
+**凭据放在 `secrets.local.cmd`**（本机专有，已在 `.gitignore` 里，**绝不入库**）。
+从模板复制一份再填两行即可：
+
+```powershell
+copy .\secrets.local.cmd.example .\secrets.local.cmd
+notepad .\secrets.local.cmd      # 填 FROM（生成授权码的那个邮箱）和 SECRET（授权码）
+```
+
+没填或还是占位符时，流水线会**明确报错并回滚状态**（不会静默成功、也不会白记一篇已投递）。
+
+### 云端路线：为什么现在没在用
+
+已实测：**archive.today 对 GitHub runner 的机房 IP 全部返回 HTTP 429**（5 个镜像无一例外），
+而它是本流水线唯一的全文来源。所以云端只能拿到约 200 字的付费预览——
+按现在的策略（`max_preview_attempts = -1`）它**什么也不会推**。
+云端定时因此在 workflow 里被注释掉了，只保留手动触发；哪天真换了住宅网络的常开设备，
+再启用 [deploy/README-server.md](../deploy/README-server.md) 那条 systemd 路线。
+
+| 方案 | 全文 | 本机关机也发 | 说明 |
+|---|---|---|---|
+| **本机计划任务 + 唤醒**（当前） | ✅ | ❌（需要通电，睡眠可唤醒） | 本机出网是住宅 IP，archive.today 正常 |
+| 家里常开设备（NAS/树莓派/旧电脑） | ✅ | ✅ | 唯一同时满足两条的路线 |
+| GitHub Actions | ❌（429） | ✅ | runner 机房 IP 被 archive.today 限流 |
+
+不管走哪条，**第一步都一样**：先跑 `python3 deploy/preflight.py`，它会逐项报告依赖、Calibre、
+sitemap 和 archive.today 的可用性，并且会打印出口 IP——**能不能拿到全文，就看这台机器能不能访问 archive.today**。
 
 ---
 
