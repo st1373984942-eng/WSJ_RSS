@@ -1,5 +1,18 @@
 # wsj-politics — 华尔街日报英文版政治板块 → RSS → Kindle
 
+> ## ⏸ 已停用（不再推送）
+>
+> 按需求，**定时推送已摘除**，现在只推送中文版（[`../wsj-kindle/`](../wsj-kindle/README.md)）。
+> 具体做了这些：
+>
+> - `.github/workflows/wsj-digest.yml` 里不再包含这个项目（没有 matrix 项）
+> - `deploy/wsj-politics.service` 与 `.timer` 已删除（服务器路线也不会跑）
+> - 项目代码、`config.json`、脚本都**原样保留**，手动执行仍可用：
+>   `python ../wsj-kindle/scripts/run_pipeline.py --project .`
+>
+> 想恢复每日推送：把这个项目加回 workflow 的 job（或复制一份 job 改 `PROJECT`），
+> 服务器路线则从 git 历史里取回那两个 systemd 单元即可。
+
 每天自动抓 WSJ **英文站政治板块**的文章，合成带全文的 RSS，转 EPUB 推到 Kindle。
 
 > 脚本与中文版**共用** [`../wsj-kindle/scripts/`](../wsj-kindle/README.md)，

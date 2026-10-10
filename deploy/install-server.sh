@@ -54,7 +54,7 @@ install -o "$RUN_USER" -g "$RUN_USER" -m 755 "$HERE/preflight.py" "$APP_ROOT/pre
 
 echo
 echo "==> 5/6 systemd 单元"
-for unit in wsj-kindle.service wsj-kindle.timer wsj-politics.service wsj-politics.timer; do
+for unit in wsj-kindle.service wsj-kindle.timer; do
   sed -e "s#__APP_ROOT__#$APP_ROOT#g" -e "s#__USER__#$RUN_USER#g" \
       "$HERE/$unit" > "/etc/systemd/system/$unit"
 done
@@ -69,10 +69,10 @@ cat <<EOF
 
   1) 上传项目（在本机 Windows 上执行，或在服务器上 git clone）：
        powershell -File sync-to-server.ps1 -Server <服务器IP> -User root
-     （也可以手工：把 wsj-kindle/ 和 wsj-politics/ 放到 $APP_ROOT/ 下，
+     （也可以手工：把 wsj-kindle/ 放到 $APP_ROOT/ 下，
        不必上传 articles/ public/ out/ data/ logs/ 这些产物目录）
 
-  2) 填配置：$APP_ROOT/wsj-kindle/config.json 和 $APP_ROOT/wsj-politics/config.json
+  2) 填配置：$APP_ROOT/wsj-kindle/config.json
        - kindle.addresses 改成你的 @kindle.com
        - kindle.smtp 填发件邮箱 + 授权码（QQ/163 要授权码，不是登录密码）
        - kindle.enabled 改成 true
@@ -83,6 +83,6 @@ cat <<EOF
        $APP_ROOT/venv/bin/python $APP_ROOT/preflight.py
        systemctl start wsj-kindle.service        # 立刻手动跑一次看看
        journalctl -u wsj-kindle -n 50 --no-pager
-       systemctl enable --now wsj-kindle.timer wsj-politics.timer
+       systemctl enable --now wsj-kindle.timer
 
 EOF

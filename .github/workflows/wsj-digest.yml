@@ -5,20 +5,16 @@ name: WSJ daily digest
 # （https://bookfere.com/post/1107.html）：Environment secrets 存 SMTP、改 cron 定时、产物进 Artifacts。
 # 与本项目不同的地方：runner 上没有 Calibre，所以 EPUB 走纯 Python 引擎
 # （build_epub.py --engine auto 会自动选择），另外把 seen.json 提交回仓库以避免重复推送。
+#
+# 目前只推送 **华尔街日报中文版**（wsj-kindle）。
+# 英文政治板块（wsj-politics）已从定时任务里摘除，项目文件保留在仓库里备用，
+# 需要恢复时把它加回下面的 job（或单独复制一份 job）即可。
 on:
   schedule:
     # 时间是 UTC。北京时间 07:00 = 前一日 23:00 UTC
     - cron: "0 23 * * *"
   workflow_dispatch:
     inputs:
-      project:
-        description: "只跑一个项目？"
-        type: choice
-        default: all
-        options:
-          - all
-          - wsj-kindle
-          - wsj-politics
       force:
         description: "忽略 seen.json，强制重抓全部"
         type: boolean
@@ -40,15 +36,9 @@ env:
 
 jobs:
   digest:
-    name: ${{ matrix.project }}
+    name: wsj-kindle
     runs-on: ubuntu-latest
     environment: kindle # secrets 放这里（仓库级 secrets 同样能取到）
-    strategy:
-      fail-fast: false
-      # 两个项目都要访问 archive.today（有限流），串行跑更稳，也避免同时提交状态冲突
-      max-parallel: 1
-      matrix:
-        project: [wsj-kindle, wsj-politics]
 
     steps:
       - uses: actions/checkout@v5
@@ -59,19 +49,7 @@ jobs:
           cache: pip
           cache-dependency-path: deploy/requirements.txt
 
-      - name: 判断本次是否需要跑这个项目
-        id: sel
-        run: |
-          want="${{ inputs.project }}"
-          if [ -z "$want" ] || [ "$want" = "all" ] || [ "$want" = "${{ matrix.project }}" ]; then
-            echo "run=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=0" >> "$GITHUB_OUTPUT"
-            echo "跳过 ${{ matrix.project }}（本次只跑 $want）"
-          fi
-
       - name: 环境信息
-        if: steps.sel.outputs.run == '1'
         run: |
           python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import os, sys, locale
@@ -85,12 +63,10 @@ jobs:
           PY
 
       - name: 安装依赖
-        if: steps.sel.outputs.run == '1'
         run: pip install -r deploy/requirements.txt
 
       - name: 检查推送凭据（secrets）
         id: creds
-        if: steps.sel.outputs.run == '1'
         env:
           TO: ${{ secrets.TO }}
           FROM: ${{ secrets.FROM }}
@@ -119,22 +95,20 @@ jobs:
           fi
 
       - name: 预检（连通性自检）
-        if: steps.sel.outputs.run == '1'
         continue-on-error: true
         run: |
-          mkdir -p "${{ matrix.project }}/logs"
-          python deploy/preflight.py 2>&1 | tee "${{ matrix.project }}/logs/preflight.txt"
+          mkdir -p "wsj-kindle/logs"
+          python deploy/preflight.py 2>&1 | tee "wsj-kindle/logs/preflight.txt"
           {
             echo "### 预检结果（连通性）"
             echo '```'
-            tail -n 22 "${{ matrix.project }}/logs/preflight.txt"
+            tail -n 22 "wsj-kindle/logs/preflight.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit 0
 
       - name: 跑流水线（发现 → 抓取 → RSS → EPUB → 推送）
         id: pipe
-        if: steps.sel.outputs.run == '1'
         env:
           # secrets 缺失时这里为 0，run_pipeline 会跳过推送而不是报错
           WSJ_KINDLE_ENABLED: "${{ steps.creds.outputs.send }}"
@@ -147,43 +121,44 @@ jobs:
         run: |
           extra=""
           [ "${{ inputs.force }}" = "true" ] && extra="--force"
-          python wsj-kindle/scripts/run_pipeline.py --project "${{ matrix.project }}" $extra \
-            2>&1 | tee "${{ matrix.project }}/logs/pipeline.log"
+          python wsj-kindle/scripts/run_pipeline.py --project "wsj-kindle" $extra \
+            2>&1 | tee "wsj-kindle/logs/pipeline.log"
           code=${PIPESTATUS[0]}
           echo "exit=$code" >> "$GITHUB_OUTPUT"
           {
-            echo "### 流水线 \`${{ matrix.project }}\`（exit=$code）"
+            echo "### 流水线 \`wsj-kindle\`（exit=$code）"
             echo '```'
-            tail -n 30 "${{ matrix.project }}/logs/pipeline.log"
+            tail -n 30 "wsj-kindle/logs/pipeline.log"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $code
 
       - name: 上传产物（EPUB + RSS + 日志）
-        if: always() && steps.sel.outputs.run == '1'
+        if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: ${{ matrix.project }}-${{ github.run_number }}
+          name: wsj-kindle-${{ github.run_number }}
           path: |
-            ${{ matrix.project }}/out/*.epub
-            ${{ matrix.project }}/public/feed.xml
-            ${{ matrix.project }}/public/digest.html
-            ${{ matrix.project }}/logs/pipeline.log
-            ${{ matrix.project }}/logs/preflight.txt
+            wsj-kindle/out/*.epub
+            wsj-kindle/public/feed.xml
+            wsj-kindle/public/digest.html
+            wsj-kindle/logs/pipeline.log
+            wsj-kindle/logs/preflight.txt
           if-no-files-found: warn
           retention-days: 30
 
       - name: 提交状态回仓库（否则每次都会重复推送）
-        if: always() && steps.sel.outputs.run == '1'
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f "${{ matrix.project }}/data/seen.json" 2>/dev/null || true
+          git add -f "wsj-kindle/data/seen.json" 2>/dev/null || true
+          git add -f "wsj-kindle/data/preview_pending.json" 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "状态无变化"
             exit 0
           fi
-          git commit -q -m "chore(${{ matrix.project }}): update digest state [skip ci]"
+          git commit -q -m "chore(wsj-kindle): update digest state [skip ci]"
           if git push; then
             echo "状态已回写仓库"
           else

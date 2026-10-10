@@ -2,9 +2,9 @@
 
 抓华尔街日报中文版（cn.wsj.com），合成带全文的 RSS，转 EPUB 推到 Kindle。全部在本机跑。
 
-> 📄 英文站政治板块在隔壁项目：[`../wsj-politics/`](../wsj-politics/README.md)
-> ——**两条链路现在用的是同一套方法**（sitemap 发现 + archive.today 取全文），
-> 共用本目录的 `scripts/`，靠 `--project` 指向各自配置。
+> **当前只推送中文版**（本目录）。英文站政治板块 `../wsj-politics/` 的定时任务已摘除——
+> 项目文件还在仓库里（同一套 sitemap + archive.today 方法，共用本目录的 `scripts/`，
+> 靠 `--project` 指向各自配置），但没有任何 workflow / timer 会跑它，想恢复随时能加回来。
 
 ---
 

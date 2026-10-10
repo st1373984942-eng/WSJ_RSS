@@ -11,8 +11,7 @@
 | `requirements.txt` | Python 依赖（`bpc-fetch` + `markdown`） |
 | `preflight.py` | **上机第一件事**：检查依赖、Calibre、sitemap 连通性、archive.today 可用性 |
 | `wsj-kindle.{service,timer}` | 中文版每日任务 |
-| `wsj-politics.{service,timer}` | 英文政治板块每日任务 |
-| `sync-to-server.ps1` | 在本机 Windows 上把两个项目传上去（只传代码和配置） |
+| `sync-to-server.ps1` | 在本机 Windows 上把项目传上去（只传代码和配置） |
 
 ## 步骤
 
@@ -32,7 +31,7 @@ cd D:\Documents\deepseek-harness\default-workspace
 powershell -File deploy\sync-to-server.ps1 -Server <服务器IP> -User root
 ```
 
-它会把 `wsj-kindle/`、`wsj-politics/`、`deploy/` 传上去，**不带** `articles/ public/ out/ data/ logs/`
+它会把 `wsj-kindle/`、`deploy/` 传上去，**不带** `articles/ public/ out/ data/ logs/`
 这些产物目录（服务器上会自己生成）。
 
 ### 3. 安装
@@ -51,7 +50,6 @@ sudo APP_ROOT=/opt/wsj-digest bash /opt/wsj-digest/deploy/install-server.sh
 
 ```bash
 vi /opt/wsj-digest/wsj-kindle/config.json      # 中文版
-vi /opt/wsj-digest/wsj-politics/config.json    # 英文政治板块
 ```
 
 改 `kindle` 段：`addresses` 填你的 `@kindle.com`，`smtp` 填发件邮箱 + 授权码，
@@ -77,12 +75,11 @@ systemctl start wsj-kindle.service          # 立刻跑一次
 journalctl -u wsj-kindle -n 80 --no-pager   # 或者看日志文件
 tail -n 80 /opt/wsj-digest/wsj-kindle/logs/pipeline.log
 
-systemctl enable --now wsj-kindle.timer wsj-politics.timer
+systemctl enable --now wsj-kindle.timer
 systemctl list-timers 'wsj-*'               # 确认下次触发时间
 ```
 
-定时器默认（`deploy/*.timer`）：中文版北京时间 07:00、英文政治板块 07:20，错开 20 分钟避免同时打
-archive.today。`Persistent=true` 表示服务器重启或错过时间点会补跑一次。
+定时器默认（`deploy/*.timer`）：北京时间 07:00。`Persistent=true` 表示服务器重启或错过时间点会补跑一次。
 
 ### 7. 日常运维
 

@@ -8,7 +8,7 @@
 
 | | 书伴的方案 | 本项目 |
 |---|---|---|
-| 抓取 | Calibre Recipe 抓 RSS/网页 | sitemap 发现 + archive.today 取全文（见两个项目 README） |
+| 抓取 | Calibre Recipe 抓 RSS/网页 | sitemap 发现 + archive.today 取全文（见 wsj-kindle/README.md） |
 | 转 EPUB | runner 上装 Calibre | **不需要 Calibre**：`build_epub.py --engine auto` 在没有 Calibre 时自动改用纯 Python（zip + XHTML + OPF），已实测能被 Calibre 正常解析转换 |
 | 状态 | 每次重新生成 | **`data/seen.json` 提交回仓库**——runner 是一次性的，不这样做每天都会重复推送同一批文章 |
 
@@ -48,7 +48,6 @@ git push -u origin main
 deploy/requirements.txt
 deploy/preflight.py
 wsj-kindle/{config.json,scripts/,README.md}
-wsj-politics/{config.json,scripts→共用,README.md}
 ```
 
 > `wsj-kindle/articles/`、`public/`、`out/`、`logs/`、`urls.txt` 都被忽略了，不会上传——
@@ -100,8 +99,7 @@ wsj-politics/{config.json,scripts→共用,README.md}
 换算公式：`UTC = 本地时间 − 时区偏移量`（不够减就 +24 并往前一天）。比如想北京时间 06:30 收到就写
 `30 22 * * *`。改完提交即可生效；也可以拿 [crontab.guru](https://crontab.guru) 生成。
 
-两个项目默认**串行**跑（`max-parallel: 1`），因为它们都要访问 archive.today，同时打容易触发限流。
-总共约 8~12 分钟，一天一次，远在免费额度内（私有仓库每月 2000 分钟）。
+定时任务只跑**中文版**这一个项目，约 3~5 分钟，一天一次，远在免费额度内（私有仓库每月 2000 分钟）。
 
 ### 5. 想临时停掉
 
