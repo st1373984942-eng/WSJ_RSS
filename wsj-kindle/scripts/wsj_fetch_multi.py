@@ -199,14 +199,18 @@ def looks_paywalled(text: str) -> bool:
 
     只看"提取出来的正文"，不要看原始 HTML——存档页的 HTML 里往往仍带着
     「畅读全文」的样板，但正文其实是完整的。
+
+    顺序很重要：**先查付费墙提示语，再查"完整结尾"标记**。
+    预览页的正文往往也带着 `Copyright © … Dow Jones & Company` 那行（它排在
+    「订阅…畅读全文」之前），所以先看 COMPLETE_MARKERS 会把预览误判成全文。
+    真实踩过：11 篇预览只加上了提示语、却没打上 paywall 标记，导致它们
+    既没被推迟、也没被如实标注。
     """
+    if any(m in text for m in PAYWALL_MARKERS):
+        return True
     tail = text[-1500:].lower()
-    head = text[:1500].lower()
     if any(m in tail for m in COMPLETE_MARKERS):
         return False
-    # 提示语通常出现在正文末尾（偶尔在开头）
-    if any(m in tail or m in head for m in PAYWALL_MARKERS):
-        return True
     return length_units(text) < 250
 
 

@@ -229,6 +229,7 @@ schtasks /run /tn "WSJ CN to Kindle"        # 立刻试跑
 | `fetch.sources` | 取文顺序：`archive_today` → `bpc_fetch` → `live` |
 | `fetch.delay_seconds` | archive.today 的请求间隔（默认 3 秒，别调太小） |
 | `fetch.good_enough_words` | 拿到这么多"字/词"就不再试后面来源（默认 500） |
+| `fetch.max_preview_attempts` | **只需预览时推迟几次**（默认 1）。见下面「为什么书里会混进概要」 |
 | `fetch.cookie` | 可选；填了订阅 cookie 后 `live` 也能直接拿全文 |
 | `fetch.paywall_note` | 只拿到预览时附加的提示语 |
 | `feed.base_url` / `server.port` | 本项目用 8080（英文项目用 8081） |
@@ -245,6 +246,7 @@ schtasks /run /tn "WSJ CN to Kindle"        # 立刻试跑
 | 三源全失败：`archive_today:404; wayback:404; live:401` | **刚发布的文章还没被任何存档站收录**，属正常现象。流程会跳过 EPUB 并以**退出码 0** 结束，且该 URL 不写入 `seen.json`，下次运行自动重试（48 小时窗口内基本都会补上） |
 | 大量 429 / 抓取变慢 | archive.today 限流；把 `fetch.delay_seconds` 调到 5~8 秒，或减少单轮篇数 |
 | 文章很短且带 `paywall_note` | 三个来源都只给了预览；填 `fetch.cookie` 可解决 |
+| **书里混进"概要/预览"** | 见下面「为什么书里会混进概要」一节；机制上现在会自动推迟这类文章 |
 | RSS 阅读器订阅 `127.0.0.1` 报 502 | 本机系统代理被 Python 客户端读到但没生效例外表；给该程序设 `NO_PROXY=127.0.0.1,localhost`（浏览器走 WinINET，`127.*` 已在例外里，不受影响） |
 | Kindle 收不到、也没报错 | 发件邮箱不在「已批准的个人文档电子邮箱列表」里 |
 | 推送报认证失败 | QQ/163 要用**授权码**，不是登录密码 |
@@ -255,7 +257,31 @@ schtasks /run /tn "WSJ CN to Kindle"        # 立刻试跑
 
 ---
 
-## 6. 每次改动的自检
+## 6. 为什么书里会混进"概要"，以及现在的处理
+
+**成因**：archive.today 是靠别人访问时顺手存档的，**有滞后**。文章刚发布那几小时，快照往往还不存在，于是 `fetch` 退到线上预览（约 250~330 字），于是书里就出现了"只有开头的概要"。
+
+实测（2026-10-09）：
+
+| 同一批 30 篇的抓取时间 | 结果 |
+|---|---|
+| 当晚 23:04（刚发布不久） | **19 篇是付费预览**，只有 11 篇全文 |
+| 几小时后重抓 | **10/10 全部 archive.today 全文**（平均 1948 字） |
+
+**现在的做法**：抓到预览时**不立刻发**，而是记进 `data/preview_pending.json` 并推迟——
+不写正文文件、不写 `seen.json`，所以下次运行会重新发现它；等 archive.today 有了快照就正常发出。
+推迟次数超过 `fetch.max_preview_attempts`（默认 1）后仍未拿到全文，才会接受预览并照常加提示，
+**不会静默丢文章**。
+
+因此**某天的书可能比平时薄**：那不是出错，而是把几篇"暂时只有概要"的文章留到了第二天出全文。
+运行摘要里的 `deferred_preview` / `deferred_titles` 会写明推迟了哪几篇。
+
+想让预览也照发（不等）就把 `fetch.max_preview_attempts` 设为 `0`；
+想多等两天就设为 `2`（注意 48 小时的 sitemap 窗口，设太大可能等不到第二次机会）。
+
+---
+
+## 7. 每次改动的自检
 
 ```powershell
 python scripts\selfcheck.py --project .     # feed 合法性 / 图片是否齐全 / EPUB 是否合法 zip
@@ -265,7 +291,7 @@ python scripts\probe_cn_archive_today.py    # archive.today 对中文文章的�
 
 ---
 
-## 7. 合规提醒
+## 8. 合规提醒
 
 archive.today 与 bpc-fetch 同属绕过付费墙的取文手段，这条流水线适合**个人订阅阅读**。
 `public/feed.xml` 含新闻全文，**只在你自己的机器/局域网内托管**，不要公开分享或对外分发——
