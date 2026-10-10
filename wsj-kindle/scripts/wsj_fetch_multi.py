@@ -300,6 +300,18 @@ def main() -> int:
     out_dir = pathlib.Path(args.out_dir) if args.out_dir else project / "articles"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # 「预览推迟」计数：data/preview_pending.json
+    # 值为 -1 表示不推迟、直接把预览发出去（关掉这个机制）
+    max_preview_tries = int(fcfg.get("max_preview_attempts", 1))
+    pending_path = project / "data" / "preview_pending.json"
+    pending: dict[str, dict] = {}
+    if pending_path.exists():
+        try:
+            pending = json.loads(pending_path.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            pending = {}
+    deferred: list[dict] = []
+
     results: list[dict] = []
     slugs: list[str] = []
     for idx, url in enumerate(urls):
@@ -335,6 +347,26 @@ def main() -> int:
         if "archive_today" in sources:
             time.sleep(delay)  # 对 archive.today 客气一点
         paywalled = looks_paywalled(text)
+        words = length_units(text)
+
+        # 拿到的是付费预览时先"推迟"，不要立刻发出去。
+        # 实测（2026-10-09）：同一批文章当晚抓到 19/30 是预览，几小时后同样的 URL
+        # 10/10 都是 archive.today 全文 —— 也就是存档站只是慢了几小时。
+        # 推迟不会写 seen.json，所以下次运行会重新发现并重抓；等够次数仍只有预览才接受。
+        if paywalled and max_preview_tries >= 0:
+            tries = int(pending.get(url, {}).get("tries", 0))
+            if tries < max_preview_tries:
+                pending[url] = {"tries": tries + 1,
+                                "last": dt.datetime.now().isoformat(timespec="seconds"),
+                                "title": title}
+                deferred.append({"url": url, "title": title, "words": words, "tries": tries + 1})
+                results.append({"ok": True, "url": url, "title": title, "deferred": True,
+                                "words": words, "source": best.get("source"),
+                                "paywall_preview": True, "attempts": attempts})
+                continue
+            print(f"  [接受预览] {title[:40]} —— 已推迟 {tries} 次仍无全文")
+        pending.pop(url, None)
+
         slug = _slugify(title)
         md, n_img = build_markdown(title, url, text, pub_date, order, best.get("images") or [],
                                    paywalled, out_dir, slug, args.no_images)
@@ -345,7 +377,6 @@ def main() -> int:
             cleaned = cleaned.rstrip() + "\n\n" + fcfg["paywall_note"] + "\n"
         md.write_text(cleaned, encoding="utf-8")
 
-        words = length_units(text)
         seen["urls"][url] = {"title": title, "path": str(md), "paywall_preview": paywalled,
                             "words": words, "source": best.get("source"),
                             "fetched": dt.datetime.now().isoformat(timespec="seconds")}
@@ -357,6 +388,8 @@ def main() -> int:
 
     seen_path.parent.mkdir(parents=True, exist_ok=True)
     seen_path.write_text(json.dumps(seen, ensure_ascii=False, indent=1), encoding="utf-8")
+    # counters will be reset as each deferred URL is fetched again
+    pending_path.write_text(json.dumps(pending, ensure_ascii=False, indent=1), encoding="utf-8")
     # 只有真抓到东西才覆盖 run_slugs.json：
     # 否则"本轮全军覆没"会把上次成功的选集清空，之后手工跑 build_epub.py 就没文章可合了
     if slugs:
@@ -364,21 +397,27 @@ def main() -> int:
             json.dumps(slugs, ensure_ascii=False, indent=1), encoding="utf-8")
     slugs_file = project / "data" / "run_slugs.json"
 
-    ok = [r for r in results if r.get("ok")]
+    accepted = [r for r in results if r.get("ok") and not r.get("deferred")]
     result = {
         "ok": True,
         "cookie_used": bool(_COOKIE),
         "sources": sources,
         "total": len(urls),
-        "success": len(ok),
-        "failed": len(results) - len(ok),
-        "paywall_preview": sum(1 for r in ok if r.get("paywall_preview")),
-        "full_text": sum(1 for r in ok if not r.get("paywall_preview")),
-        "avg_words": round(sum(r["words"] for r in ok) / len(ok)) if ok else 0,
+        "success": len(accepted),
+        "failed": sum(1 for r in results if not r.get("ok")),
+        "deferred_preview": len(deferred),
+        "deferred_titles": [d["title"][:34] for d in deferred[:8]],
+        "paywall_preview": sum(1 for r in accepted if r.get("paywall_preview")),
+        "full_text": sum(1 for r in accepted if not r.get("paywall_preview")),
+        "avg_words": round(sum(r["words"] for r in accepted) / len(accepted)) if accepted else 0,
         "slugs_file": str(slugs_file),
-        "articles": [{k: r[k] for k in ("title", "words", "source", "paywall_preview")} for r in ok],
+        "articles": [{k: r[k] for k in ("title", "words", "source", "paywall_preview")}
+                     for r in accepted],
         "errors": [{"url": r["url"], "error": r["error"]} for r in results if not r.get("ok")][:5],
     }
+    if deferred:
+        print(f"注：{len(deferred)} 篇目前只有付费预览，已推迟到下次运行"
+              f"（archive.today 通常几小时内就有全文，届时会正常发出）", file=sys.stderr)
     print(json.dumps(result, ensure_ascii=False, indent=None if args.compact else 2))
     return 0
 
