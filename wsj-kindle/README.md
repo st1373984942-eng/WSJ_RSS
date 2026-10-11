@@ -310,6 +310,41 @@ python scripts\run_pipeline.py --project . --skip-prune   # 本次流水线跳�
 
 ---
 
+## 4.2 EPUB 的目录（按新闻标题生成）
+
+EPUB 里其实有**三套**目录，缺一套就会出现"在某些阅读器里看不到目录"的情况——所以都做了：
+
+| 组成 | 内容 | 作用 |
+|---|---|---|
+| **可见目录页** | 第一页就是「目录」+ 30 条可点击标题 | 翻书就能看到；不依赖阅读器的菜单 |
+| **NCX 目录** | 每篇一个 navPoint，文本即标题 | 阅读器/Kindle 的「前往 → 目录」菜单 |
+| **guide 指向** | `<reference type="toc" href="目录页">` | 告诉阅读器"目录"入口在哪 |
+
+两个引擎都产出这三样：
+
+- **Calibre 引擎**：`digest.html` 顶部插入目录块（标题用 `<p>` 而非 `<h2>`，否则
+  `--level1-toc=//h:h2` 会把"目录"自己也收成一条），再配
+  `--level1-toc=//h:h2`（NCX = 标题）、`--chapter=//h:h2`（按篇分章）、
+  `--page-breaks-before=//h:h2`（每篇另起一页）；生成后由 `patch_epub_guide()`
+  把 guide 的 toc 指向补进 OPF。
+- **纯 Python 引擎**：自己写 `nav.xhtml`（放在 spine **第一位**，所以打开即目录页）、
+  `toc.ncx` 与 guide。
+
+验证方式（改完 EPUB 相关代码请重跑）：
+
+```powershell
+python scripts\build_epub.py --project . --all          # 出成品
+python scripts\selfcheck.py  --project .                # 合法性/图片/zip
+# 再转一次 Kindle 格式，确认目录没在转换中丢掉
+& 'F:\Program Files\Calibre2\ebook-convert.exe' out\xxx.epub out\rt.azw3
+& 'F:\Program Files\Calibre2\ebook-convert.exe' out\rt.azw3 out\rt.epub
+```
+
+实测（30 篇）：NCX 30 条、可见目录页 30 条链接**全部可达**（`30/30`）、guide 有 toc、
+`EPUB → AZW3 → EPUB` 之后 NCX 仍是 30 条标题 —— 说明 Send to Kindle 之后目录还在。
+
+---
+
 ## 5. 排错表
 
 | 现象 | 原因 / 处理 |

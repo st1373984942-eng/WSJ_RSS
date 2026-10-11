@@ -48,6 +48,11 @@ img { max-width: 100%; height: auto; }
 .masthead { text-align: center; margin-bottom: 2em; }
 .masthead h1 { border: none; font-size: 2em; }
 hr.sep { border: none; border-top: 1px solid #ddd; margin: 2.5em 0; }
+.toc { margin: 1.5em 0 2em; }
+.toc-title { font-size: 1.3em; font-weight: bold; border-bottom: 1px solid #333;
+             padding-bottom: .2em; }
+.toc-list { padding-left: 1.4em; }
+.toc-list li { margin: .35em 0; line-height: 1.5; }
 """
 
 
@@ -82,10 +87,22 @@ def build_html(items: list[dict], title: str, generated: str, base_url: str = ""
         f"<p class='meta'>生成于 {html.escape(generated)} · 共 {len(items)} 篇</p>",
         "</div>",
     ]
-    for i, it in enumerate(items):
-        if i:
+    # 可见的目录页（新闻标题列表）。
+    # 光有 NCX 是不够的：很多阅读器——尤其是 Send to Kindle 转换之后的书——
+    # 不会主动弹出 NCX 菜单，但一定会把这一页当正文第一页显示出来。
+    # 标题行故意用 <p> 而不是 <h2>：下面 --level1-toc=//h:h2 会把 h2 收进 NCX，
+    # 用 h2 的话「目录」自己也会变成一条目录项。
+    if items:
+        parts.append("<div id='toc' class='toc'>")
+        parts.append("<p class='toc-title'>目录</p>")
+        parts.append("<ol class='toc-list'>")
+        for i, it in enumerate(items, 1):
+            parts.append(f"<li><a href='#art{i}'>{html.escape(it['title'])}</a></li>")
+        parts.append("</ol></div>")
+    for i, it in enumerate(items, 1):
+        if i > 1:
             parts.append("<hr class='sep'/>")
-        parts.append(f"<h2>{html.escape(it['title'])}</h2>")
+        parts.append(f"<h2 id='art{i}'>{html.escape(it['title'])}</h2>")
         meta_bits = [html.escape(str(it.get("date", ""))[:10])]
         if it.get("author"):
             meta_bits.append(html.escape(str(it["author"])))
@@ -93,6 +110,79 @@ def build_html(items: list[dict], title: str, generated: str, base_url: str = ""
         parts.append(item_body(it, base_url, for_epub=False))
     parts.append("</body></html>")
     return "\n".join(parts)
+
+
+def patch_epub_guide(epub_path: pathlib.Path, marker: str = "id='toc'") -> str:
+    """给 Calibre 产出的 EPUB 补一条 guide 的「目录」指向。
+
+    Calibre 的 HTML 输入只会写 cover，不写 toc；而 Kindle 和不少阅读器据此决定
+    菜单里要不要给出「目录」入口。做法：找出含目录标记的那个正文文件，把它写成
+    <reference type="toc">，原有条目保留。失败也不影响书本身，返回原因字符串即可。
+    """
+    import posixpath
+    import re
+    import tempfile
+
+    if not epub_path.exists():
+        return "no_epub"
+    tmp = epub_path.with_name(epub_path.name + ".tmp")
+    try:
+        with zipfile.ZipFile(epub_path) as zin:
+            names = zin.namelist()
+            opf_name = next((n for n in names if n.endswith(".opf")), None)
+            if not opf_name:
+                return "no_opf"
+            opf = zin.read(opf_name).decode("utf-8", "replace")
+
+            # 找出含目录标记的正文文件（兼容两种引号写法）
+            variants = {marker, 'id="toc"', "id=toc"}
+            toc_href = ""
+            for n in names:
+                if not n.lower().endswith((".xhtml", ".html", ".htm")):
+                    continue
+                body = zin.read(n).decode("utf-8", "replace")
+                if any(v in body for v in variants):
+                    toc_href = n
+                    break
+            if not toc_href:
+                return "no_toc_page"
+
+            base = posixpath.dirname(opf_name)
+            rel = posixpath.relpath(toc_href, base) if base else toc_href
+            entry = f'<reference type="toc" title="目录" href="{rel}"/>'
+
+            if re.search(r'<reference[^>]*type="toc"[^>]*/>', opf):
+                opf = re.sub(r'<reference[^>]*type="toc"[^>]*/>', entry, opf, count=1)
+            elif re.search(r"<guide\s*/>", opf):
+                opf = re.sub(r"<guide\s*/>", f"<guide>{entry}</guide>", opf, count=1)
+            elif "<guide>" in opf:
+                opf = opf.replace("<guide>", f"<guide>\n    {entry}", 1)
+            elif "<guide " in opf:  # 带属性（少见）
+                opf = re.sub(r"(<guide[^>]*>)", r"\1" + entry, opf, count=1)
+            else:
+                opf = opf.replace("</package>", f"  <guide>\n    {entry}\n  </guide>\n</package>")
+
+            with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+                for n in names:
+                    # 注意：OPF 要写**改过的那一份**，其余按原样复制。
+                    # （第一版这里对所有条目都用 zin.read()，等于把刚改好的 OPF 丢了，
+                    #   函数还返回 ok —— 静默无效，真实踩过。）
+                    data = opf.encode("utf-8") if n == opf_name else zin.read(n)
+                    if n == "mimetype":  # 必须第一个、且不压缩
+                        zout.writestr(zipfile.ZipInfo("mimetype"), data, zipfile.ZIP_STORED)
+                    else:
+                        zout.writestr(n, data)
+        tmp.replace(epub_path)
+
+        # 自校验：写完再读回来确认 guide 真的有了 toc，避免"返回 ok 其实没改"
+        with zipfile.ZipFile(epub_path) as zchk:
+            check = zchk.read(opf_name).decode("utf-8", "replace")
+        if not re.search(r'<reference[^>]*type="toc"', check):
+            return "verify_failed"
+        return f"ok:{rel}"
+    except Exception as exc:  # noqa: BLE001
+        tmp.unlink(missing_ok=True)
+        return f"failed:{type(exc).__name__}"
 
 
 # --------------------------------------------------------------- 引擎一：Calibre
@@ -115,7 +205,13 @@ def epub_via_calibre(calibre: pathlib.Path, html_path: pathlib.Path, epub_path: 
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok = proc.returncode == 0 and epub_path.exists()
-    return ok, (proc.stderr or proc.stdout or "")[-500:] if not ok else ""
+    if not ok:
+        return False, (proc.stderr or proc.stdout or "")[-500:]
+    # Calibre 只写 cover 不写 toc，补上 guide 的目录指向（失败不影响书本身）
+    guide = patch_epub_guide(epub_path)
+    if not guide.startswith("ok:"):
+        print(f"  [warn] guide 目录指向补写结果: {guide}", file=sys.stderr)
+    return True, ""
 
 
 # --------------------------------------------------------------- 引擎二：纯 Python
@@ -189,7 +285,8 @@ def epub_via_python(items: list[dict], epub_path: pathlib.Path, cfg: dict,
         f'<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{lang}" lang="{lang}">\n'
         f'<head><meta charset="utf-8"/><title>{html.escape(title)}</title>'
         '<link rel="stylesheet" type="text/css" href="style.css"/></head>\n'
-        f'<body><h2>{html.escape(title)}</h2><ul>{nav_items}</ul></body></html>\n')
+        f'<body><h1>{html.escape(title)}</h1>'
+        f'<p class="toc-title">目录</p><ul>{nav_items}</ul></body></html>\n')
     docs["nav.xhtml"] = nav
 
     ncx_points = "\n".join(
