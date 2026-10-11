@@ -254,15 +254,31 @@ def main() -> int:
     if epub.exists() and epub.stat().st_size > 50 * 1024 * 1024:
         problems.append(f"附件 {epub.stat().st_size/1e6:.1f}MB 超过 50MB 邮件上限")
 
-    # 占位符快速失败：模板里的 you@qq.com 非空但显然不是真值，
-    # 与其拿它去换一个 535 再让人排查半天，不如当场说清楚
-    placeholders = {"you@qq.com", "you@example.com", "your@email.com", "you@gmail.com"}
-    if (smtp.get("username") or "").strip().lower() in placeholders or \
-       (smtp.get("from") or "").strip().lower() in placeholders:
-        problems.append(
-            f"发件地址/登录用户名还是模板占位符（{smtp.get('username') or smtp.get('from')}）——"
-            "必须改成你自己的邮箱。QQ 邮箱要求登录名就是**生成该授权码的那个邮箱**，"
-            "只有 FROM 对了、登录名还是占位符同样会 535")
+    # 占位符快速失败：模板里的 you@qq.com / PUT-YOUR-... 非空但显然不是真值，
+    # 与其拿它去换一个 535 再让人排查半天，不如当场说清楚（也不用联网）
+    user_now = (smtp.get("username") or "").strip()
+    from_now = (smtp.get("from") or "").strip()
+    secret_now = (smtp.get("password") or "").strip()
+
+    def looks_placeholder(value: str) -> bool:
+        v = value.strip().lower()
+        if not v:
+            return False
+        if v in {"you@qq.com", "you@example.com", "your@email.com", "you@gmail.com"}:
+            return True
+        # 模板/示例值：PUT-YOUR-... / CHANGE-ME / YOUR-NAME / xxx / 你的邮箱
+        return any(t in v for t in ("put-your", "change-me", "changeme", "your-email",
+                                    "your-address", "your@", "example.com", "xxxx",
+                                    "你的邮箱", "你的qq")) or v.startswith("set ")
+
+    for label, value in (("发件地址 FROM", from_now), ("登录用户名", user_now),
+                         ("SMTP 授权码 SECRET", secret_now)):
+        if looks_placeholder(value):
+            problems.append(
+                f"{label} 还是模板占位符（{value}）——必须改成你自己的真实值。"
+                "本机请编辑 wsj-kindle/secrets.local.cmd（模板为 secrets.local.cmd.example）；"
+                "QQ 邮箱要求登录名就是**生成该授权码的那个邮箱**，只改 FROM 而登录名仍是占位符"
+                "同样会 535")
 
     base_result = {
         "epub": str(epub),
