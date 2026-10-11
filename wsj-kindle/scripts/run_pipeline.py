@@ -79,6 +79,7 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="忽略 seen.json，重抓")
     ap.add_argument("--skip-discover", action="store_true")
     ap.add_argument("--skip-fetch", action="store_true")
+    ap.add_argument("--skip-prune", action="store_true", help="跳过清理过期素材")
     ap.add_argument("--no-epub", action="store_true")
     ap.add_argument("--no-send", action="store_true")
     ap.add_argument("--epub-all", action="store_true", help="EPUB 用全部文章而不是仅本轮")
@@ -100,6 +101,17 @@ def main() -> int:
     disc_script = config.get("pipeline", {}).get("discover_script") or "wsj_discover.py"
     fetch_script = config.get("pipeline", {}).get("fetch_script") or "wsj_fetch.py"
     steps: list[dict] = []
+
+    # 第一步先清理过期素材（默认保留 retention.article_days 天）：
+    # 放在发现/构建之前，这样 RSS 与 EPUB 只会用剩下的新文章，
+    # 也顺手避免了历史遗留的旧预览文件被 --all 之类捞进成品。
+    # 清理失败不致命（最多是磁盘没腾出来），所以 required=False。
+    if not args.skip_prune:
+        steps.append(run_step("prune", [str(SCRIPTS / "prune_old.py"),
+                                        "--project", str(project), "--compact"],
+                              required=False))
+        if steps[-1]["returncode"] != 0:
+            print("清理过期素材失败（不影响本次推送，继续）", file=sys.stderr)
 
     if not args.skip_discover:
         argv = [str(SCRIPTS / disc_script), "--project", str(project)]

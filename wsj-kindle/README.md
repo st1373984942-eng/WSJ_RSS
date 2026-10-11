@@ -138,6 +138,7 @@ wsj-kindle/
     ├── wsj_discover.py            # RSS 发现（保留，Google Referer 那条路）
     ├── wsj_fetch.py               # 纯 bpc-fetch 抓取（保留，作对照/兜底）
     ├── build_feed.py / build_epub.py / send_kindle.py / serve_feed.py
+    ├── prune_old.py               # 【本项目在用】清理过期素材（默认保留 3 天）
     ├── run_pipeline.py / selfcheck.py
     └── probe_*.py                 # 当初摸站点行为用的探针（留作复查）
 ```
@@ -152,7 +153,7 @@ Playwright 1.63、markdown）；Calibre 在 `F:\Program Files\Calibre2\`。
 ```powershell
 cd D:\Documents\deepseek-harness\default-workspace\wsj-kindle
 
-# 一条命令跑完（发现 → 抓取 → RSS → EPUB，kindle.enabled=true 时再发邮件）
+# 一条命令跑完（清理过期素材 → 发现 → 抓取 → RSS → EPUB，kindle.enabled=true 时再发邮件）
 & 'F:\Program Files\Python\python.exe' scripts\run_pipeline.py --project .
 .\run_daily.cmd                      # 同上，会写 logs\pipeline.log
 
@@ -267,6 +268,45 @@ sitemap 和 archive.today 的可用性，并且会打印出口 IP——**能不�
 | `fetch.paywall_note` | 只拿到预览时附加的提示语 |
 | `feed.base_url` / `server.port` | 本项目用 8080（英文项目用 8081） |
 | `feed.author` | 默认"华尔街日报中文版" |
+| `retention.article_days` | 新闻素材保留天数（**默认 3**）：更老的文章目录连同配图一起删除，见第 4.1 节 |
+| `retention.epub_days` | 历史 EPUB 保留天数（默认 3） |
+| `retention.ledger_days` | `seen.json` 条目保留天数（默认 30，远超 48 小时窗口，安全） |
+| `retention.enabled` | `false` 则完全不清理 |
+
+---
+
+## 4.1 自动清理过期新闻（`scripts/prune_old.py`）
+
+素材会一天天堆积（实测积累到 100 篇文章 + 217 张图 + 16 本旧 EPUB ≈ **120 MB**），
+所以流水线的**第一步**就会清理过期素材，默认只留最近 **3 天**：
+
+```
+[prune] 删掉 articles/ 里超过 3 天的文章（按 frontmatter 的 date:）
+        删掉 public/images/ 里已经对应不上文章的孤儿图片目录
+        删掉 out/ 里超过 3 天的历史 EPUB
+        把 seen.json 里超过 30 天的条目收掉（早已出了 48 小时 sitemap 窗口）
+```
+
+实测一次清理：**删 39 篇文章 + 37 个孤儿图片目录，释放 41.2 MB**，随后 RSS/EPUB 构建与自检全部正常。
+
+手动查看/执行：
+
+```powershell
+python scripts\prune_old.py --project . --dry-run     # 只报告会删什么，不动文件
+python scripts\prune_old.py --project .               # 按 config.json 执行
+python scripts\prune_old.py --project . --days 7      # 临时改成保留 7 天
+python scripts\run_pipeline.py --project . --skip-prune   # 本次流水线跳过清理
+```
+
+几个安全设计：
+
+- **判断依据是新闻发布日期**（frontmatter 的 `date:`），缺失时退回文件修改时间 —— 不是"抓取时间"
+- 边界按"超过 N 天"算：今天 10-11、保留 3 天时，cutoff 是 10-08，**10-08 当天的文章会保留**
+- 删除前逐个校验路径确实位于项目目录内；`--days` 最小为 1，避免误设成 0 把素材全清空
+- 日期缺失或异常的账本条目**一律保留**，宁可多留也不误删导致重复推送
+- 清理放在发现/构建**之前**，所以 RSS 与 EPUB 只会包含保留期内的文章（也顺带杜绝了
+  "历史遗留的旧预览文件被 `--all` 捞进成品"这类问题）
+- 清理失败**不算流水线失败**（`required=False`），最多是这次没腾出空间
 
 ---
 

@@ -63,5 +63,11 @@
                                 "from":  "",
                                 "from_name":  "WSJ to Kindle"
                             }
-               }
+               },
+    "retention":  {
+                      "enabled":  true,
+                      "article_days":  3,
+                      "epub_days":  3,
+                      "ledger_days":  30
+                  }
 }
