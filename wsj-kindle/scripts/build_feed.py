@@ -28,6 +28,9 @@ import sys
 
 import markdown
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from mdutil import fix_paragraphs  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 RFC822 = "%a, %d %b %Y %H:%M:%S +0000"
 DEFAULT_AUTHOR = "华尔街日报中文版"
@@ -107,7 +110,10 @@ def load_article(md_path: pathlib.Path, base_url: str) -> dict:
                 shutil.copy2(img, target)
 
     # markdown -> <img src="images/xxx.jpg">，再统一改成绝对 URL
-    body_html = markdown.markdown(body, extensions=["extra", "sane_lists", "md_in_html"])
+    # 先把"单换行分隔的段落"补成空行：否则 Markdown 会把连续行并成同一段，
+    # 原文十几个自然段在 EPUB/RSS 里会被压成一大段（旧文章也靠这一步兜底）
+    body_html = markdown.markdown(fix_paragraphs(body),
+                                  extensions=["extra", "sane_lists", "md_in_html"])
 
     def fix_src(m: re.Match) -> str:
         quote, url = m.group(1), m.group(2)

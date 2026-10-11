@@ -27,6 +27,9 @@ import pathlib
 import re
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from mdutil import fix_paragraphs  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # --------------------------------------------------------------------------
@@ -105,6 +108,9 @@ def clean_markdown(md: str, note: str | None = None) -> tuple[str, bool]:
             continue
         kept.append(line)
     out = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip() + "\n"
+    # 段落之间只有单换行的话，Markdown 会把它们并成同一段 —— 原文十几个自然段
+    # 在 EPUB 里会变成一大坨。这里统一补成空行分隔（frontmatter 不受影响）。
+    out = fix_paragraphs(out)
     note = _PAYWALL_NOTE if note is None else note
     if paywalled and note:
         out = out.rstrip() + "\n\n" + note + "\n"
