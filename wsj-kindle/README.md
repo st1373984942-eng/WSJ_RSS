@@ -471,4 +471,19 @@ archive.today 与 bpc-fetch 同属绕过付费墙的取文手段，这条流水�
 | **B. 用订阅身份拿全文** | 在浏览器登录 WSJ，把 Cookie 填进 `fetch.cookie`（`sources` 里 `live` 放第一位） | 需要有效订阅；Cookie 会过期，要偶尔更新 |
 | **C. 暂停推送** | 计划任务里禁用 `WSJ-Kindle-Daily` | 不会有残缺的书，等站点策略变回来 |
 
+### 当前状态：已按方案 C 暂停（2026-10-26）
+
+计划任务 `WSJ-Kindle-Daily` 已置为 `Disabled`，最后一次运行是 2026-10-26 07:00。
+`config.json` 里仍是 `max_preview_attempts: -1`（永不接受预览），所以即使手工跑一次，
+只要拿不到全文就只会推迟、不会推书。
+
+想恢复时（任选其一）：
+
+```powershell
+Enable-ScheduledTask -TaskName 'WSJ-Kindle-Daily'      # 恢复每日 07:00 自动跑
+Start-ScheduledTask  -TaskName 'WSJ-Kindle-Daily'      # 只想立刻跑一次
+```
+
+如果改主意想每天收"摘要版"，把 `config.json` 的 `fetch.max_preview_attempts` 改成 `0` 再恢复任务即可。
+
 
