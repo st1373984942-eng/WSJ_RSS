@@ -31,6 +31,9 @@ from xml.etree import ElementTree as ET
 import httpx
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from netinfo import system_proxy  # noqa: E402
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36")
@@ -218,7 +221,9 @@ def main() -> int:
         "titles": [f"{it['title'][:56]}" for it in fresh[:6]],
     }
     if not rows:
-        result["hint"] = ("sitemap 一个都没拿到。检查：1) 本机系统代理(127.0.0.1:7892)是否在跑，"
+        # 端口不要写死：Clash 换过默认端口（7892 → 7890），写死会把"代理换了端口"
+        # 误报成"代理没开"（真实踩过：10-24、10-25 两天整轮失败）
+        result["hint"] = (f"sitemap 一个都没拿到。检查：1) 本机系统代理({system_proxy()})是否在跑，"
                           "直连 www.wsj.com 是不通的；2) Referer 是否仍是 https://www.google.com/")
     print(json.dumps(result, ensure_ascii=False, indent=None if args.compact else 2))
     return 0 if rows else 1

@@ -28,6 +28,7 @@ import pathlib
 import re
 import sys
 import time
+import urllib.parse
 
 import httpx
 import trafilatura
@@ -64,7 +65,19 @@ COMPLETE_MARKERS = [
     "write to ",
     "appeared in the",
 ]
+# 真正的"报纸式结尾"，短稿里也只在全文上出现（Copyright 行预览页也有，所以不算）
+PRINT_ENDINGS = ["print edition as", "appeared in the", "write to "]
+# 低于这个长度一律当预览：中文稿全文实测 628~3200 字，只有 150~250 字的必然是
+# 预览那两段（2026-10-15 起 WSJ 中文站对未登录读者只给两段）
+MIN_FULL_UNITS = 300
 CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
+
+# 预览页的"续读入口"：WSJ 把「订阅后继续阅读」渲染成一条指向**本文自己**的链接，
+# trafilatura 输出 markdown 时它会变成一条裸 URL 落在正文尾部。真实全文的结尾
+# 不会出现自己的 URL（结尾是 Copyright / Appeared in the … print edition）。
+TEASER_LINK_RE = re.compile(
+    r"(?:https?://)?(?:cn\.|www\.)?wsj\.com/(?:articles|news|politics|world|business|"
+    r"finance|tech|opinion|economy|markets)/[\w\-%.]+", re.I)
 
 
 def length_units(text: str) -> int:
@@ -235,24 +248,50 @@ SOURCES = {"archive_today": src_archive_today, "wayback": src_wayback,
            "live": src_live, "bpc_fetch": src_bpc_fetch}
 
 
-def looks_paywalled(text: str) -> bool:
+def self_link_in(tail: str, url: str) -> bool:
+    """尾部是否出现**这篇文章自己**的链接（订阅按钮被渲染成裸 URL）。"""
+    if not url:
+        return bool(TEASER_LINK_RE.search(tail))
+    path = urllib.parse.urlsplit(url).path.rstrip("/")
+    if len(path) > 12 and path in tail:
+        return True
+    return bool(TEASER_LINK_RE.search(tail))
+
+
+def looks_paywalled(text: str, url: str = "") -> bool:
     """判断拿到的是全文还是付费墙预览（中英通用）。
 
     只看"提取出来的正文"，不要看原始 HTML——存档页的 HTML 里往往仍带着
     「畅读全文」的样板，但正文其实是完整的。
 
-    顺序很重要：**先查付费墙提示语，再查"完整结尾"标记**。
-    预览页的正文往往也带着 `Copyright © … Dow Jones & Company` 那行（它排在
-    「订阅…畅读全文」之前），所以先看 COMPLETE_MARKERS 会把预览误判成全文。
-    真实踩过：11 篇预览只加上了提示语、却没打上 paywall 标记，导致它们
-    既没被推迟、也没被如实标注。
+    判定顺序（四层，都是踩过坑换来的）：
+      1. 正文里出现付费墙提示语 → 预览。
+      2. 尾部出现**指向本文自己的 WSJ 链接** → 预览。"订阅后继续阅读" 那个
+         按钮会被 trafilatura 渲染成一条裸 URL 落在正文最后，真实全文的结尾
+         是自己的 Copyright / print edition 行，不会出现自己的 URL。
+         传入 url 时按"本文路径"严格比对，避免把文末的相关阅读链接误伤。
+      3. **长度不足** → 预览。
+      4. 尾部出现"报纸式结尾" → 全文；其余按全文处理（长稿就算结尾被存档站
+         截掉，也不该因为缺个 Copyright 行就永远发不出去）。
+
+    第 3 条必须排在"结尾标记"之前：**预览页也带 `Copyright © … Dow Jones`
+    那行**，先看 COMPLETE_MARKERS 会把 2 段预览判成全文。
+    真实踩过：2026-10-15 起 WSJ 中文站改成硬付费墙，每篇只剩 2 段预览，
+    而这条误判让 6 篇预览被当成全文发进 Kindle（`paywall_preview: false`、
+    平均 203 字），用户在书里看到的自然就是"只有开头几段"。
+
+    传进来的 text 必须是**清理过样板行的正文**（clean_markdown 的结果）：
+    `live` 抓下来的原始正文里混着导航、热门文章、订阅框，长度会被撑到 300+
+    单位，拿它量长度会把两段预览当成全文（2026-10-26 实测 4 篇就是这么漏的）。
     """
     if any(m in text for m in PAYWALL_MARKERS):
         return True
-    tail = text[-1500:].lower()
-    if any(m in tail for m in COMPLETE_MARKERS):
-        return False
-    return length_units(text) < 250
+    tail = text[-1500:]
+    if self_link_in(tail, url):
+        return True
+    if length_units(text) < MIN_FULL_UNITS:
+        return not any(m in tail.lower() for m in PRINT_ENDINGS)
+    return False
 
 
 def build_markdown(title: str, url: str, text: str, pub_date: str, order: int,
@@ -403,8 +442,11 @@ def main() -> int:
         text = best["text"]
         if "archive_today" in sources:
             time.sleep(delay)  # 对 archive.today 客气一点
-        paywalled = looks_paywalled(text)
-        words = length_units(text)
+        # 用"清理过样板行"的正文来判定：原始正文里混着导航/热门文章/订阅框，
+        # 直接量长度会把两段预览算成 300+ 单位（2026-10-26 实测漏了 4 篇）。
+        judged, _ = clean_markdown(f"# {title}\n\n{text}\n", note="")
+        paywalled = looks_paywalled(judged, url)
+        words = length_units(judged)
 
         # 拿到的是付费预览时先"推迟"，不要立刻发出去。
         # 实测（2026-10-09）：同一批文章当晚抓到 19/30 是预览，几小时后同样的 URL
@@ -481,7 +523,8 @@ def main() -> int:
     }
     if deferred:
         print(f"注：{len(deferred)} 篇目前只有付费预览，已推迟到下次运行"
-              f"（archive.today 通常几小时内就有全文，届时会正常发出）", file=sys.stderr)
+              f"（若几天后仍是预览，说明这几篇拿不到全文，见 README「只有两段预览」）",
+              file=sys.stderr)
     print(json.dumps(result, ensure_ascii=False, indent=None if args.compact else 2))
     return 0
 

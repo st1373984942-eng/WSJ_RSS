@@ -15,6 +15,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
@@ -52,9 +53,17 @@ def rollback_seen(project: pathlib.Path, slugs: list[str]) -> int:
 
 def run_step(name: str, argv: list[str], required: bool = True) -> dict:
     print(f"\n=== [{name}] {' '.join(argv[1:])}", flush=True)
-    proc = subprocess.run([sys.executable, *argv], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", cwd=str(ROOT))
-    out = (proc.stdout or "").strip()
+    # 不用 capture_output：受限环境（低完整性沙箱）里 CreatePipe 会被拒绝，
+    # 报 PermissionError: [WinError 5]。改成把子进程输出重定向到临时文件再读回来。
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as fout, \
+            tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as ferr:
+        proc = subprocess.run([sys.executable, *argv], stdout=fout, stderr=ferr,
+                              cwd=str(ROOT))
+        fout.seek(0)
+        ferr.seek(0)
+        out = fout.read()
+        err = ferr.read()
+    out = (out or "").strip()
     parsed: dict | None = None
     # 子脚本的 stdout 可能混进人类可读的提示行，所以从第一个 '{' 开始解析，
     # 失败再从最后一个 '{' 试一次 —— 否则会把"抓到了但全是预览"误读成"什么都没抓到"
@@ -65,11 +74,11 @@ def run_step(name: str, argv: list[str], required: bool = True) -> dict:
             break
         except json.JSONDecodeError:
             continue
-    print(out if out else (proc.stderr or "").strip(), flush=True)
-    if proc.returncode != 0 and (proc.stderr or "").strip():
-        print(proc.stderr.strip(), file=sys.stderr, flush=True)
+    print(out if out else err.strip(), flush=True)
+    if proc.returncode != 0 and err.strip():
+        print(err.strip(), file=sys.stderr, flush=True)
     return {"step": name, "returncode": proc.returncode, "result": parsed,
-            "stderr_tail": (proc.stderr or "")[-300:], "required": required}
+            "stderr_tail": err[-300:], "required": required}
 
 
 def main() -> int:

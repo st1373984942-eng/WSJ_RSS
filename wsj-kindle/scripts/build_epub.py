@@ -26,6 +26,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 import zipfile
 
@@ -203,10 +204,16 @@ def epub_via_calibre(calibre: pathlib.Path, html_path: pathlib.Path, epub_path: 
         "--chapter=//h:h2",
         "--page-breaks-before=//h:h2",
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    # 不用 capture_output：受限沙箱里 CreatePipe 会被拒绝（WinError 5），改走临时文件
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as fout, \
+            tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as ferr:
+        proc = subprocess.run(cmd, stdout=fout, stderr=ferr)
+        fout.seek(0)
+        ferr.seek(0)
+        out_text, err_text = fout.read(), ferr.read()
     ok = proc.returncode == 0 and epub_path.exists()
     if not ok:
-        return False, (proc.stderr or proc.stdout or "")[-500:]
+        return False, (err_text or out_text or "")[-500:]
     # Calibre 只写 cover 不写 toc，补上 guide 的目录指向（失败不影响书本身）
     guide = patch_epub_guide(epub_path)
     if not guide.startswith("ok:"):
